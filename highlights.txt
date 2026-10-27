@@ -1,0 +1,5 @@
+- Data-center UPS fleets deliver distributed synthetic inertia and frequency response
+- Sensor filtering achieves 65.0 ms rise time and 1.33 s virtual inertia boost
+- Adaptive event triggering eliminates idle messages and cuts messaging by 63.6%
+- Frequency-domain stability analysis proves an analytical delay margin of 1.58 s
+- Monte Carlo runs confirm robustness while preserving 40-minute backup autonomy

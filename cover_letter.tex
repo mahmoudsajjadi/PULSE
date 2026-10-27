@@ -1,0 +1,85 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{charter}
+\usepackage{microtype}
+\usepackage{booktabs}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue,
+    citecolor=blue
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+
+\begin{document}
+
+\textbf{Seyed Mahmoud Sajjadi Mohammadabadi}\\
+Department of Computer Science and Engineering\\
+University of Nevada, Reno\\
+1664 N. Virginia St., Reno, NV 89557, USA\\
+Email: \href{mailto:mahmoud.sajjadi@unr.edu}{mahmoud.sajjadi@unr.edu}\\
+ORCID: 0009-0001-9629-9734\\[1em]
+\today
+
+\textbf{Professor Gianfranco Chicco}\\
+Editor-in-Chief, \textit{Sustainable Energy, Grids and Networks} (SEGAN)\\
+Elsevier\\[1em]
+
+\textbf{Subject: Submission of Original Research Article to \textit{Sustainable Energy, Grids and Networks}}\\[0.8em]
+
+Dear Professor Chicco and Editorial Board,
+
+I am pleased to submit my original research manuscript titled:
+
+\begin{center}
+\textbf{``Communication-Aware Event-Triggered Primary Frequency and Synthetic Inertia Support from Data Center UPS Fleets''}
+\end{center}
+
+for consideration as a Research Article in \textit{Sustainable Energy, Grids and Networks} (SEGAN).
+
+\subsubsection*{Alignment with SEGAN Aims and Scope}
+This manuscript directly advances several core focus areas specified in the SEGAN Aims and Scope, namely:
+\begin{enumerate}
+    \item \textbf{Control and planning of centralized and distributed energy storage}: Decentralized allocation of fast power reserves across multi-agent battery arrays while strictly respecting local state-of-charge boundaries and mission-critical backup runtime floors.
+    \item \textbf{ICT integration in electrical and energy systems for monitoring and control}: Communication-aware event-triggering over local area networks with imperfect channels subject to packet drop, log-normal jitter, and variable sensing latencies.
+    \item \textbf{Modeling of cyber-physical energy and communication systems}: Unified frequency-domain and time-domain stability formulations coupling physical power-frequency swing dynamics with discrete network protocols.
+    \item \textbf{Demand-side management and demand response: definition of control schemes and protocols}: Harnessing pre-capitalized computing infrastructure to provide clean grid services without requiring dedicated utility-scale land footprint.
+\end{enumerate}
+
+\subsubsection*{Key Methodological and Practical Contributions}
+The paper addresses the challenge of declining synchronous inertia in low-carbon grids by leveraging uninterruptible power supply (UPS) batteries in hyperscale data centers. Crucially, rather than presenting a case study or converter topology design, the paper provides fundamental methodological and computational contributions:
+\begin{itemize}
+    \item \textbf{Analytical Tracking and Nadir Degradation Bound}: We derive a closed-form analytical theorem (Section~2.3.1) proving that the worst-case frequency nadir degradation under adaptive event-triggering, network delay, and packet loss is strictly bounded by $|\Delta f_{\mathrm{err}}| \le 8.0\,\mathrm{mHz}$ relative to continuous droop.
+    \item \textbf{Communication-Aware Adaptive Thresholding}: We formulate PULSE (Primary-frequency UPS Local Sub-second Event-triggered control), which eliminates idle-state communication under ambient drift and cuts post-contingency message traffic by $63.6\%$ compared to fixed-threshold schemes.
+    \item \textbf{Analytical Delay Margin and Stability Proof}: Frequency-domain Nyquist and Bode stability analyses establish an open-loop phase margin of $68.2^\circ$ and an analytical delay margin $\tau_{\mathrm{margin}} = 1.58\,\mathrm{s}$, exceeding actual network delays by more than twenty-fold.
+    \item \textbf{Sensing Realism and RoCoF Filtering}: We reframe sub-cycle synthetic inertia by leading with realistic 1-cycle PLL ($65.0\,\mathrm{ms}$) and 2-cycle PMU ($90.5\,\mathrm{ms}$) closed-loop power rise times, avoiding unphysical derivative chattering and inverter saturation.
+    \item \textbf{Battery Autonomy and Degradation Assurance}: Dynamic battery modeling proves that providing 30~s grid support consumes only $0.166\,\mathrm{kWh}$ per rack, maintaining $>40\,\mathrm{min}$ of autonomous IT backup runtime ($100\%$ Tier III/IV compliance) with negligible 10-year cycling wear ($<0.018\%$).
+\end{itemize}
+
+\subsubsection*{Contribution to UN Sustainable Development Goals (SDGs)}
+This work directly supports \textbf{UN SDG 7 (Affordable and Clean Energy)} and \textbf{SDG 11 (Sustainable Cities and Communities)} by transforming massive, pre-capitalized, and otherwise idle data center energy storage into low-carbon cyber-physical grid stability reserves, lowering reliance on fossil-fuel peaker plants.
+
+\subsubsection*{Declarations and Submission Details}
+\begin{itemize}
+    \item \textbf{Sole Authorship}: The author is the sole contributor and conducted all conceptualization, modeling, simulation, formal analysis, and manuscript preparation.
+    \item \textbf{Originality}: This manuscript is original, has not been published previously, and is not currently under consideration for publication elsewhere.
+    \item \textbf{Conflict of Interest}: The author declares that there are no known competing financial interests or personal relationships that could have appeared to influence this work.
+    \item \textbf{Data Availability}: All simulation code, automated verification suites, and numerical datasets are openly accessible via GitHub and permanently archived on Zenodo with DOI: \href{https://doi.org/10.5281/zenodo.14920188}{10.5281/zenodo.14920188}.
+    \item \textbf{Generative AI Statement}: AI assisted with language editing and grammar polishing. The author reviewed and edited all content and takes full responsibility for the published article.
+\end{itemize}
+
+Thank you very much for your time and consideration of this manuscript.
+
+\vspace{1em}
+Sincerely,\\[1em]
+\textbf{Seyed Mahmoud Sajjadi Mohammadabadi}\\
+Department of Computer Science and Engineering\\
+University of Nevada, Reno\\
+Email: \href{mailto:mahmoudsajjadi@unr.edu}{mahmoudsajjadi@unr.edu}
+
+\end{document}

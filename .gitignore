@@ -1,9 +1,4 @@
-# Ignore LaTeX build and submission files
-*.tex
-*.bib
-*.bst
-*.cls
-*.sty
+# Ignore auxiliary LaTeX build artifacts
 *.aux
 *.log
 *.out
@@ -11,9 +6,8 @@
 *.blg
 *.spl
 *.abs
-manuscript.pdf
-manuscript_cas.pdf
-highlights.txt
+*.synctex.gz
 __pycache__/
 *.pyc
 .DS_Store
+.pytest_cache/
