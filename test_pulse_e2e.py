@@ -698,44 +698,70 @@ class TestTier1FeatureCoverage(unittest.TestCase):
 
     # --- Feature 16: Overclaims Pruning ---
     def test_f16_excise_gw_scale_claim(self):
-        overclaim = "gigawatt-scale"
-        sample_text = "Data center fleets provisioned at gigawatt-scale"
-        self.assertIn(overclaim, sample_text.lower())
+        tex_path = os.path.join(REPO_DIR, "manuscript.tex")
+        with open(tex_path, "r", encoding="utf-8") as f:
+            content = f.read().lower()
+        self.assertNotIn("gigawatt-scale", content)
+        self.assertNotIn("gigawatt", content)
 
     def test_f16_excise_multi_tenant_claim(self):
-        overclaim = "multi-tenant"
-        sample_text = "Networked, multi-tenant infrastructure"
-        self.assertIn(overclaim, sample_text.lower())
+        tex_path = os.path.join(REPO_DIR, "manuscript.tex")
+        with open(tex_path, "r", encoding="utf-8") as f:
+            content = f.read().lower()
+        self.assertNotIn("multi-tenant", content)
+        self.assertNotIn("multitenant", content)
 
     def test_f16_excise_calibrated_claim(self):
-        overclaim = "calibrated"
-        sample_text = "In a calibrated simulation"
-        self.assertIn(overclaim, sample_text.lower())
+        tex_path = os.path.join(REPO_DIR, "manuscript.tex")
+        with open(tex_path, "r", encoding="utf-8") as f:
+            content = f.read().lower()
+        self.assertNotIn("calibrated", content)
 
     def test_f16_excise_zeno_proof_claim(self):
-        overclaim = "provably excludes zeno"
-        sample_text = "A fixed dwell time provably excludes Zeno behavior."
-        self.assertIn(overclaim, sample_text.lower())
+        tex_path = os.path.join(REPO_DIR, "manuscript.tex")
+        with open(tex_path, "r", encoding="utf-8") as f:
+            content = f.read().lower()
+        self.assertNotIn("provably excludes zeno", content)
+        self.assertTrue("refractory" in content or "dwell time" in content)
 
     def test_f16_excise_central_dispatch_claim(self):
-        overclaim = "centrally dispatched bess"
-        sample_text = "Centrally dispatched BESS"
-        self.assertIn(overclaim, sample_text.lower())
+        tex_path = os.path.join(REPO_DIR, "manuscript.tex")
+        with open(tex_path, "r", encoding="utf-8") as f:
+            content = f.read().lower()
+        self.assertNotIn("centrally dispatched bess", content)
+        self.assertIn("decentralized", content)
 
     # --- Feature 17: Theoretical Storytelling & Framing ---
     def test_f17_framing_7_4ms_idealized(self):
-        self.assertAlmostEqual(7.4, 7.4)
+        tex_path = os.path.join(REPO_DIR, "manuscript.tex")
+        with open(tex_path, "r", encoding="utf-8") as f:
+            content = f.read().lower()
+        self.assertIn("idealized", content)
+        self.assertTrue("7.3" in content or "7.4" in content)
 
     def test_f17_lead_realistic_filtering(self):
-        self.assertLess(55.7, 197.6)
+        tex_path = os.path.join(REPO_DIR, "manuscript.tex")
+        with open(tex_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertTrue("1-cycle PLL" in content or "pll" in content.lower())
+        self.assertTrue("2-cycle PMU" in content or "pmu" in content.lower())
+        self.assertTrue("55.7" in content and "197.6" in content)
+        self.assertTrue("65.0" in content and "90.5" in content)
 
     def test_f17_dwell_time_anti_zeno_design(self):
-        dwell = 1.5e-3
-        self.assertGreater(dwell, 0.0)
+        tex_path = os.path.join(REPO_DIR, "manuscript.tex")
+        with open(tex_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertTrue(r"\delta = 1.5" in content or "1.5" in content)
+        self.assertTrue("dwell time" in content.lower() or "refractory" in content.lower())
 
     def test_f17_tier_iii_iv_dc_framing(self):
-        tier_min_backup_min = 5.0
-        self.assertGreaterEqual(tier_min_backup_min, 5.0)
+        tex_path = os.path.join(REPO_DIR, "manuscript.tex")
+        with open(tex_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertIn("Tier III", content)
+        self.assertIn("Tier IV", content)
+        self.assertTrue("10" in content and "15" in content)
 
     def test_f17_sfr_low_order_validity(self):
         self.assertEqual(GRID_PARAMS["Sbase"], 300.0)
