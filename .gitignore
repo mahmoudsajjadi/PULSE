@@ -1,0 +1,19 @@
+# Ignore LaTeX build and submission files
+*.tex
+*.bib
+*.bst
+*.cls
+*.sty
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.spl
+*.abs
+manuscript.pdf
+manuscript_cas.pdf
+highlights.txt
+__pycache__/
+*.pyc
+.DS_Store
