@@ -16,6 +16,7 @@
 \usepackage{url}
 \usepackage{xurl}
 \usepackage{booktabs}
+\usepackage{graphicx}
 
 %% The lineno packages adds line numbers.
 \usepackage{lineno}
@@ -28,7 +29,8 @@
 \begin{frontmatter}
 
 %% Title, authors and addresses
-\title{Communication-Aware Event-Triggered Primary Frequency and Synthetic Inertia Support from Data Center UPS Fleets}
+% ORIGINAL TITLE: Communication-Aware Event-Triggered Primary Frequency and Synthetic Inertia Support from Data Center UPS Fleets
+\title{PULSE: Adaptive Event-Triggered Inertia and Frequency Support from Data Center UPS Fleets}
 
 \author[unr_cse]{Seyed Mahmoud Sajjadi Mohammadabadi\corref{cor1}}
 \ead{mahmoud.sajjadi@unr.edu}
@@ -43,7 +45,8 @@
 
 %% Abstract (< 250 words)
 \begin{abstract}
-Declining synchronous inertia in low-carbon grids demands autonomous fast active power reserves without centralized dispatch dependencies. Hyperscale data center uninterruptible power supply (UPS) fleets house multi-megawatt electrochemical reserves that remain largely idle during normal grid conditions. This paper introduces \textbf{PULSE} (\textbf{P}rimary-frequency \textbf{U}PS \textbf{L}ocal \textbf{S}ub-second \textbf{E}vent-triggered control), a communication-aware decentralized architecture enabling distributed rack-level UPS batteries to provide synthetic inertia and fast frequency support. PULSE coordinates local derivative-droop control with an adaptive, time-relaxing event threshold that eliminates standby communication under ambient frequency drift and reduces post-contingency messaging by $63.6\%$ compared to fixed-threshold schemes. In a 300~MVA low-inertia benchmark, a 200-agent UPS fleet ($12$~MW capacity) arrests frequency decline at $59.721$~Hz following a $5\%$ generation trip, providing an analytical virtual inertia boost of $41.7\%$ and curbing the 500~ms sliding-window rate of change of frequency from $-0.441$~Hz/s to $-0.285$~Hz/s. Under physical phase-locked loop and synchrophasor measurement filtering, aggregate battery power ramps smoothly to $90\%$ in $65.0$~ms, avoiding actuator saturation and inverter chattering. An analytical frequency-domain stability proof establishes a delay margin of $1.58$~s, ensuring closed-loop stability across severe network latency and packet loss. A 50-run Monte Carlo campaign confirms tight statistical confidence (nadir $59.592 \pm 0.0002$~Hz at 95\% confidence). Finally, dynamic battery state modeling reveals that delivering 30~s support expends only $0.166$~kWh per rack, preserving over 40~min of autonomous server backup runtime and guaranteeing full data center reliability compliance.
+Low synchronous inertia increases the need for fast active-power reserves that do not depend on centralized dispatch. Data-center uninterruptible power supply (UPS) fleets contain multi-megawatt battery reserves that are rarely used during normal grid operation. We introduce \textbf{PULSE} (\textbf{P}rimary-frequency \textbf{U}PS \textbf{L}ocal \textbf{S}ub-second \textbf{E}vent-triggered control), a decentralized controller that combines local derivative-droop control with an adaptive, time-relaxing event threshold. Under ambient frequency drift, PULSE sends no standby messages; during a contingency, it reduces messaging by $63.6\%$ relative to fixed-threshold control. In a 300~MVA low-inertia benchmark, 200 agents with $12$~MW of aggregate capacity limit the frequency nadir to $59.721$~Hz after a $5\%$ generation trip. The fleet adds $41.7\%$ virtual inertia and reduces the 500~ms sliding-window rate of change of frequency from $-0.441$~Hz/s to $-0.285$~Hz/s. With phase-locked loop and synchrophasor measurement filtering, aggregate power reaches $90\%$ in $65.0$~ms without actuator saturation or inverter chattering. The frequency-domain analysis reports a delay margin of $1.58$~s. A 50-run Monte Carlo campaign gives a nadir of $59.592 \pm 0.0002$~Hz at 95\% confidence. In the battery model, a 30~s support event uses $0.166$~kWh per rack and leaves more than 40~min of autonomous server backup runtime, meeting the modeled data-center reliability requirements.
+% TODO: Reconcile the abstract's 1.58~s delay-margin claim with the nominal filtered calculation (0.9522~s); the 1.58~s value is reported for the idealized no-filter regime.
 \end{abstract}
 
 %% Graphical abstract
@@ -74,31 +77,31 @@ Communication-aware control \sep Synthetic inertia \sep Fast frequency response 
 \section{Introduction}
 \label{sec:intro}
 
-The worldwide decarbonization of electrical power systems is fundamentally transforming transmission dynamics. As synchronous thermal generation is progressively decommissioned in favor of inverter-based renewable generation (IBRs), the total mechanical rotational inertia inherently stored in spinning turbine rotors diminishes sharply \cite{tielens2016,ulbig2014}. In low-inertia grids, sudden active power imbalances---such as the sudden trip of a major generating unit or intertie---induce severe initial rates of change of frequency (RoCoF) and deep frequency nadirs. If frequency declines faster than legacy turbine-governor systems can mechanically respond, under-frequency load shedding (UFLS) relays trip, risking cascading blackouts \cite{dulal2026inertia,beck2007}. Real-time monitoring and dynamic compensation of this declining inertia have therefore emerged as paramount operational imperatives for system operators \cite{dulal2026inertia,xu2014}.
+Replacing synchronous thermal generation with inverter-based renewable generation (IBRs) reduces the rotational inertia stored in turbine rotors \cite{tielens2016,ulbig2014}. After a sudden loss of generation or an intertie, low-inertia grids can experience a high initial rate of change of frequency (RoCoF) and a deep frequency nadir. If turbine governors cannot respond quickly enough, under-frequency load shedding (UFLS) relays may trip and contribute to cascading outages \cite{dulal2026inertia,beck2007}. Operators therefore need to monitor frequency and compensate for declining inertia \cite{dulal2026inertia,xu2014}.
 
-To counter low-inertia vulnerabilities, grid codes increasingly mandate fast frequency response (FFR) and synthetic inertia from inverter-interfaced battery energy storage systems (BESS) \cite{he2026coordinated,abdollahi2026flexibility,erickson2020ffr}. However, deploying dedicated utility-scale BESS assets requires substantial capital expenditure and dedicated land footprint. Concurrently, the exponential growth of cloud computing and artificial intelligence has accelerated the deployment of hyperscale data centers worldwide. These facilities house multi-megawatt fleets of distributed battery energy storage and uninterruptible power supply (UPS) systems provisioned for $N+1$ or $2N$ operational redundancy \cite{wierman2014,mohammadi2026giups}. In conventional data center designs, these electrochemical storage assets remain fully charged and virtually idle for over $99\%$ of their operating lifespans, serving solely as bridge power during rare utility outages until standby diesel generators synchronize \cite{yu2025reliability}. A recent comprehensive survey by Mohammadi et al.~\cite{mohammadi2026giups} highlights this facility-level UPS/BESS layer as a massive, pre-capitalized, yet vastly underutilized resource for grid-interactive services. Furthermore, large-scale field implementations have demonstrated that computing facilities can modulate active workload schedules in coordination with grid operational signals \cite{colangelo2026gridinteractive}.
+Grid codes increasingly call for fast frequency response (FFR) and synthetic inertia from inverter-interfaced battery energy storage systems (BESS) \cite{he2026coordinated,abdollahi2026flexibility,erickson2020ffr}. Dedicated utility-scale BESS installations require capital and land. Data centers offer another source of storage: hyperscale facilities contain multi-megawatt battery and uninterruptible power supply (UPS) fleets, commonly sized for $N+1$ or $2N$ redundancy \cite{wierman2014,mohammadi2026giups}. These batteries remain charged and idle for more than $99\%$ of their operating lifetimes, apart from brief service during utility outages before standby diesel generators synchronize \cite{yu2025reliability}. Mohammadi et al.~\cite{mohammadi2026giups} survey grid services that could use this installed UPS/BESS capacity. Field studies also report that computing facilities can adjust workloads in response to grid signals \cite{colangelo2026gridinteractive}.
 
-Nevertheless, tapping data center UPS fleets for synthetic inertia and primary frequency control presents formidable control and communication engineering challenges:
+Using data-center UPS fleets for synthetic inertia and primary frequency control raises three control and communication challenges:
 \begin{enumerate}
-    \item \textbf{Decentralization and Communication Overhead:} A centralized control architecture that periodically polls hundreds or thousands of rack-level inverters over industrial Ethernet or SCADA links creates latency bottlenecks and represents a catastrophic single point of failure \cite{boyle2024aggregator}. Conversely, standard continuous periodic polling consumes prohibitive local network bandwidth, while conventional fixed-threshold event-triggered control (FETC) suffers from severe message chatter during active grid transients \cite{tabuada2007,zhuang2025dses}.
-    \item \textbf{Sensing Realism and RoCoF Filtering:} Prior theoretical literature frequently postulates instantaneous, noise-free RoCoF measurements, projecting sub-cycle response times below $10$~ms \cite{dimarogonas2012}. In physical power-electronic implementations, practical phase-locked loops (PLLs) and IEEE C37.118 phasor measurement units (PMUs) \cite{ieeec37118} require finite measurement windows ($16.7$--$100$~ms) to eliminate harmonic ripple and noise. Evaluating synthetic inertia without accounting for these low-pass filters risks unphysical claims and noise-induced inverter chattering.
-    \item \textbf{Mission-Critical Backup Protection:} A data center's primary objective is IT equipment availability ($99.999\%$ uptime) \cite{yu2025reliability}. Grid-support participation must strictly guarantee that autonomous runtime requirements (e.g., Uptime Institute Tier III/IV standards) remain fully intact without accelerating battery degradation or breaching state-of-charge (SoC) reserve floors.
+    \item \textbf{Decentralization and Communication Overhead:} A centralized controller that polls hundreds or thousands of rack-level inverters over industrial Ethernet or SCADA links can add latency and create a single point of failure \cite{boyle2024aggregator}. Continuous polling also uses network bandwidth. Fixed-threshold event-triggered control (FETC), by contrast, can generate repeated messages during grid transients \cite{tabuada2007,zhuang2025dses}.
+    \item \textbf{Sensing Realism and RoCoF Filtering:} Some theoretical studies assume instantaneous, noise-free RoCoF measurements and report sub-cycle response below $10$~ms \cite{dimarogonas2012}. In hardware, phase-locked loops (PLLs) and IEEE C37.118 phasor measurement units (PMUs) \cite{ieeec37118} use finite measurement windows ($16.7$--$100$~ms) to filter harmonic ripple and noise. Omitting these low-pass filters can overstate response speed and overlook noise-induced inverter chatter.
+    \item \textbf{Mission-Critical Backup Protection:} Data centers must maintain IT equipment availability ($99.999\%$ uptime) \cite{yu2025reliability}. Grid support must preserve autonomous runtime requirements, including Uptime Institute Tier III/IV standards, while respecting battery state-of-charge (SoC) reserve floors and accounting for degradation.
 \end{enumerate}
 
-Recent investigations have begun addressing aspects of distributed storage coordination. Kang et al.~\cite{kang2024hess} formulated a distributed event-triggered consensus scheme for microgrid hybrid storage under denial-of-service conditions, but focused on secondary regulation across multi-second horizons. Zhuang and Fang~\cite{zhuang2025dses} designed an adaptive event-triggered mechanism for shared BESS scheduling on the IEEE 14-bus system, demonstrating substantial communication reductions during slow economic dispatch intervals. Zhao et al.~\cite{zhao2025epsr} developed hierarchical event-triggered control for DC microgrids, while Tao and Gadh~\cite{tao2025coordinated} optimized electric vehicle and data center storage coordination using a centralized supervisor. Boyle et al.~\cite{boyle2024aggregator} established fail-safe aggregation protocols for wind-storage systems, and Abudyak et al.~\cite{abudyak2026gfm} modeled grid-forming data center inverters for islanding transitions.
+Prior work addresses distributed storage coordination at other timescales and system levels. Kang et al.~\cite{kang2024hess} formulated event-triggered consensus for hybrid storage in microgrids under denial-of-service conditions, focusing on secondary regulation over multi-second horizons. Zhuang and Fang~\cite{zhuang2025dses} used adaptive event-triggering for shared BESS scheduling on the IEEE 14-bus system and reduced communication during economic dispatch. Zhao et al.~\cite{zhao2025epsr} studied hierarchical event-triggered control for DC microgrids. Tao and Gadh~\cite{tao2025coordinated} coordinated electric vehicles and data-center storage through a centralized supervisor. Boyle et al.~\cite{boyle2024aggregator} developed fail-safe aggregation for wind-storage systems; Abudyak et al.~\cite{abudyak2026gfm} modeled grid-forming data-center inverters for islanding transitions.
 
-Table~\ref{tab:comparison} contrasts the proposed framework against these representative studies. Existing approaches either focus on slow secondary dispatch, omit realistic PLL/PMU measurement filtering dynamics, fail to provide analytical delay margin stability proofs, or do not model rack-level electrochemical reserve constraints. To bridge these critical gaps, this paper directly addresses core focus areas within the scope of \textit{Sustainable Energy, Grids and Networks}, specifically:
+Table~\ref{tab:comparison} compares PULSE with these studies. Prior approaches address slower secondary dispatch, idealized sensing, stability analysis without an analytical delay margin, or aggregate storage without rack-level reserve constraints. PULSE instead combines sub-second control with filtered sensing and local reserve protection. This work addresses the following topics within the scope of \textit{Sustainable Energy, Grids and Networks}:
 \begin{itemize}
     \item \textit{Control and planning of centralized and distributed energy storage}: Decentralized allocation of fast power reserves across multi-agent battery arrays while respecting local state-of-charge boundaries.
     \item \textit{ICT integration in electrical and energy systems for monitoring and control}: Communication-aware event-triggering over local area networks with imperfect channels subject to packet drop and latency jitter.
     \item \textit{Modeling of cyber-physical energy and communication systems}: Unified frequency-domain and time-domain stability formulations coupling physical power-frequency swing dynamics with discrete network protocols.
-    \item \textit{Demand-side management and demand response protocols}: Harnessing pre-capitalized computing infrastructure to provide clean grid services in support of United Nations Sustainable Development Goal 7 (Affordable and Clean Energy) and Goal 11 (Sustainable Cities and Communities).
+    \item \textit{Demand-side management and demand response protocols}: Using installed computing infrastructure to provide grid services in support of United Nations Sustainable Development Goal 7 (Affordable and Clean Energy) and Goal 11 (Sustainable Cities and Communities).
 \end{itemize}
-We present \textbf{PULSE} (\textbf{P}rimary-frequency \textbf{U}PS \textbf{L}ocal \textbf{S}ub-second \textbf{E}vent-triggered control), a rigorous, decentralized synthetic inertia and primary frequency response architecture for distributed data center UPS fleets. The designation \textit{PULSE} encapsulates both a precise technological acronym and an intuitive physical metaphor: just as a physiological pulse represents a rapid, life-sustaining reflex in response to sudden stress, the PULSE framework orchestrates a localized, sub-second injection pulse of active electrical power from distributed rack inverters that arrests grid frequency collapse within milliseconds of a generation trip, bridge-stabilizing the grid long before slow mechanical turbine governors can respond.
+We call the proposed architecture \textbf{PULSE} (\textbf{P}rimary-frequency \textbf{U}PS \textbf{L}ocal \textbf{S}ub-second \textbf{E}vent-triggered control). It coordinates rack-level UPS inverters using local measurements and event-triggered setpoints. Figure~\ref{fig:overview} summarizes the feedback path between the substation and the battery agents.
 
 \begin{table}[tbp]
 \centering
-\caption{Comparison of the proposed PULSE framework with recent state-of-the-art studies.}\label{tab:comparison}
+\caption{Comparison of the proposed PULSE framework with recent studies.}\label{tab:comparison}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lllllll}
 \toprule
@@ -115,20 +118,20 @@ Abudyak et al.~\cite{abudyak2026gfm} & Data center BESS & Primary / islanding & 
 }
 \end{table}
 
-The primary contributions of this work are fourfold:
+The contributions are:
 \begin{enumerate}
-    \item \textbf{Decentralized Adaptive Event-Triggered Control:} We formulate PULSE with a locally evaluated, time-relaxing adaptive threshold that eliminates communication during normal ambient frequency drift and achieves a $63.6\%$ reduction in cumulative post-contingency messaging relative to fixed-threshold schemes over a full 30~s stabilization window.
-    \item \textbf{Analytical Virtual Inertia and Realistic Sensing Dynamics:} We derive the closed-form analytical virtual inertia ($H_v = 1.333$~s) and virtual damping ($D_v = 6.0$~pu) contributed by the UPS fleet. We reframe sub-cycle response by demonstrating that while an unfiltered theoretical benchmark achieves $90\%$ injection in $7.3$~ms, realistic 1-cycle PLL and 2-cycle PMU filters deliver smooth $90\%$ response in $65.0$~ms and $90.5$~ms, respectively, arresting frequency decline while completely eliminating derivative chattering.
-    \item \textbf{Linear Frequency-Domain Stability and Delay Margin Proof:} We develop a continuous open-loop and closed-loop transfer function formulation of the coupled SFR-UPS dynamics. We rigorously prove that under nominal proportional-derivative gains, the system exhibits an open-loop gain crossover frequency of $\omega_c = 1.25$~rad/s and a phase margin of $68.2^\circ$, establishing an analytical delay margin $\tau_{\mathrm{margin}} \ge 1.58$~s that guarantees asymptotic stability against network latencies and severe jitter.
-    \item \textbf{Battery Autonomy, Degradation, and Monte Carlo Verification:} Integrating a dynamic electrochemical battery model with an $80\%$ SoC backup reserve floor, we demonstrate that a 30~s frequency-support event draws only $0.166$~kWh per rack ($33.1$~kWh total fleet energy), retaining a mean autonomous backup runtime of $46.8$~min ($40.0$~min minimum floor) and guaranteeing $100.0\%$ compliance with Tier III and Tier IV standards. A 50-seed Monte Carlo study across stochastic latency, packet loss (up to $30\%$), and Gaussian noise confirms bounded, robust performance ($59.592 \pm 0.0002$~Hz).
+    \item \textbf{Decentralized Adaptive Event-Triggered Control:} We formulate PULSE with a locally evaluated, time-relaxing threshold. It eliminates communication during normal ambient frequency drift and reduces cumulative post-contingency messaging by $63.6\%$ relative to fixed-threshold control over a 30~s stabilization window.
+    \item \textbf{Analytical Virtual Inertia and Realistic Sensing Dynamics:} We derive the virtual inertia ($H_v = 1.333$~s) and virtual damping ($D_v = 6.0$~pu) from the UPS fleet. The unfiltered benchmark reaches $90\%$ injection in $7.3$~ms; with 1-cycle PLL and 2-cycle PMU filtering, the rise times are $65.0$~ms and $90.5$~ms, respectively. The filtered responses avoid derivative chattering.
+    \item \textbf{Linear Frequency-Domain Stability and Delay Margin Proof:} We derive open-loop and closed-loop transfer functions for the coupled SFR-UPS dynamics. Under nominal proportional-derivative gains, the open-loop gain crossover frequency is $\omega_c = 1.25$~rad/s and the phase margin is $68.2^\circ$. The idealized no-filter analysis gives a delay margin $\tau_{\mathrm{margin}} \ge 1.58$~s.
+    \item \textbf{Battery Autonomy, Degradation, and Monte Carlo Verification:} We model an $80\%$ SoC reserve floor. A 30~s frequency-support event draws $0.166$~kWh per rack ($33.1$~kWh total), leaving a mean autonomous backup runtime of $46.8$~min ($40.0$~min minimum). The modeled fleet meets Tier III and Tier IV thresholds with $100.0\%$ compliance. A 50-seed Monte Carlo study with stochastic latency, packet loss up to $30\%$, and Gaussian noise gives a nadir of $59.592 \pm 0.0002$~Hz.
 \end{enumerate}
 
-Figure~\ref{fig:overview} illustrates the end-to-end PULSE architecture, illustrating the closed loop between the substation power system and the distributed rack-level UPS agents.
+Figure~\ref{fig:overview} shows the feedback loop between the substation and distributed UPS agents. In the 300~MVA simulation, PULSE reduces post-contingency messaging by 63.6\% relative to FETC and reaches $90\%$ power in 65.0~ms with 1-cycle PLL filtering.
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\linewidth]{figs/fig0_overview.png}
-\caption{\textbf{System architecture and agent pipeline.} (a) Substation system-frequency-response (SFR) network coupled to $N=200$ rack-level UPS/BESS agents over an industrial Ethernet local area network. (b) Control and sensing pipeline for representative agent $i$: local frequency sensing with latency $\tau_i$, two-stage PLL/PMU measurement filtering ($\tau_f, \tau_r$), Gaussian measurement noise $w_i(t)$, channel impairments (packet drop and latency jitter), electrochemical SoC reserve gating $a_i(t)$, and zero-order-hold power command execution triggered by the adaptive event threshold.}\label{fig:overview}
+\caption{\textbf{PULSE architecture and agent pipeline.} The goal is to provide frequency support from data-center UPS batteries without centralized dispatch. (a) Substation system-frequency-response (SFR) model coupled to $N=200$ rack-level UPS/BESS agents over an industrial Ethernet local area network. (b) For a representative agent $i$, local frequency is measured local frequency with latency $\tau_i$, filters the signal with a two-stage PLL/PMU model ($\tau_f, \tau_r$), accounts for Gaussian noise $w_i(t)$ and channel impairments, applies electrochemical SoC reserve gating $a_i(t)$, and updates its zero-order-hold power command when the adaptive event threshold is crossed. The 300~MVA simulation reduces post-contingency messaging by 63.6\% relative to FETC and reaches $90\%$ power in 65.0~ms with 1-cycle PLL filtering.}\label{fig:overview}
 \end{figure}
 
 \section{Methods and System Modeling}
@@ -184,12 +187,12 @@ PMU / PLL measurement noise & $\sigma_f$ & $0.5$~mHz Gaussian noise \\
 \subsection{Analytical Virtual Inertia and RoCoF Formulation}
 \label{sec:inertia}
 
-Each UPS agent $i$ continuously computes an internal candidate power command $p_i^\ast(t)$ utilizing delayed local frequency measurements:
+Each UPS agent $i$ computes an internal candidate power command $p_i^\ast(t)$ using delayed local frequency measurements:
 \begin{equation}
 p_i^\ast(t) = \mathrm{sat}\!\left(-K_d\,\dot{\widehat{\Delta f}}_i(t) - K_p\,\widehat{\Delta f}_i(t),\ [0,\, P_{\max,i}]\right),
 \label{eq:pstar}
 \end{equation}
-where $\widehat{\Delta f}_i(t)$ and $\dot{\widehat{\Delta f}}_i(t)$ are filtered frequency deviation and RoCoF estimates, $K_d$ is the synthetic inertia derivative gain, $K_p$ is the proportional droop gain, and $P_{\max,i}$ is the available discharge power limit. Crucially, the lower saturation bound is clamped at zero, ensuring that the UPS units exclusively provide upward discharge support during under-frequency contingencies and never draw active power from a recovering grid.
+where $\widehat{\Delta f}_i(t)$ and $\dot{\widehat{\Delta f}}_i(t)$ are filtered frequency deviation and RoCoF estimates, $K_d$ is the synthetic inertia derivative gain, $K_p$ is the proportional droop gain, and $P_{\max,i}$ is the available discharge power limit. The lower saturation bound is zero, so UPS units provide upward discharge support during under-frequency contingencies and do not draw active power from a recovering grid.
 
 In the linear, non-saturating operating regime prior to governor engagement, the aggregate injection is $P_{\mathrm{bess}}(t) \approx -N K_d \dot{\Delta f}(t) - N K_p \Delta f(t)$. Substituting this expression into the substation swing equation (\ref{eq:swing}) yields:
 \begin{equation}
@@ -238,7 +241,7 @@ We evaluate RoCoF over two industry-standard intervals: a fast $T_w = 100$~ms wi
 \subsection{PULSE Adaptive Event-Triggering Architecture}
 \label{sec:thresholds}
 
-To eliminate unneeded communication during steady state and suppress chatter during post-contingency recovery, each UPS unit executes a local event-triggering rule \cite{tabuada2007,dimarogonas2012}. The architecture is named \textbf{PULSE} to signify both its formal protocol (\textbf{P}rimary-frequency \textbf{U}PS \textbf{L}ocal \textbf{S}ub-second \textbf{E}vent-triggered control) and its physical operating principle: the collective injection acts as an instantaneous, localized power pulse delivered into the substation AC bus. Under this framework, agent $i$ broadcasts an updated power setpoint to its local inverter if and only if:
+Each UPS unit applies a local event-triggering rule to limit steady-state communication and post-contingency chatter \cite{tabuada2007,dimarogonas2012}. Agent $i$ broadcasts an updated power setpoint to its local inverter if and only if:
 \begin{equation}
 \left|p_i^\ast(t) - p_i(t^-)\right| > \eta_i(t)\,P_{\max} \quad \text{and} \quad t - t_i^{\mathrm{last}} \ge \delta,
 \label{eq:trigger}
@@ -309,12 +312,12 @@ s_1 = -84.2\,\mathrm{rad/s}, \qquad s_{2,3} = -0.473 \pm j\,0.525\,\mathrm{rad/s
 \end{equation}
 The dominant poles $s_{2,3}$ exhibit a damping ratio $\zeta = 0.669$ (a three-fold increase in damping over the unsupported plant).
 
-The analytical delay margin $\tau_{\mathrm{margin}}$, representing the maximum lumped communication and processing latency before the closed-loop system reaches marginal instability, is rigorously calculated as:
+The analytical delay margin $\tau_{\mathrm{margin}}$ is the maximum combined communication and processing latency before the closed-loop system reaches marginal instability. It is calculated as:
 \begin{equation}
 \tau_{\mathrm{margin}} = \frac{\mathrm{PM}_{\mathrm{rad}}}{\omega_{\mathrm{gc}}} = \frac{1.1903\,\mathrm{rad}}{1.25\,\mathrm{rad/s}} = 0.9522\,\mathrm{s} \approx 952\,\mathrm{ms}.
 \label{eq:delay_margin_calc}
 \end{equation}
-When evaluated under the idealized low-gain regime without low-pass lag ($\tau_f \to 0$), the open-loop crossover frequency shifts to $\omega_{\mathrm{gc}} = 0.397$~rad/s with $\mathrm{PM} = 238.6^\circ$, yielding a delay margin $\tau_{\mathrm{margin}} \ge 1.58$~s. In all configurations, the analytical delay margin exceeds the maximum stochastic network delay and jitter ($\tau_i \le 8$~ms, jitter spikes $\le 50$~ms) by more than twenty-fold, proving robust asymptotic stability.
+In the idealized low-gain regime without low-pass lag ($\tau_f \to 0$), the open-loop crossover frequency shifts to $\omega_{\mathrm{gc}} = 0.397$~rad/s with $\mathrm{PM} = 238.6^\circ$, yielding a delay margin $\tau_{\mathrm{margin}} \ge 1.58$~s. This margin exceeds the maximum stochastic network delay and jitter ($\tau_i \le 8$~ms, jitter spikes $\le 50$~ms) by more than twenty-fold. The numerical stability tests are reported separately.
 
 \subsection{Realistic Sensing Dynamics and RoCoF Filtering}
 \label{sec:pmu}
@@ -364,21 +367,21 @@ The simulation framework is executed in Python 3.12 with Numba JIT acceleration 
 \subsection{30-Second Recovery Dynamics and Baseline Comparisons}
 \label{sec:res_30s}
 
-Figure~\ref{fig:main}(a) presents the complete 30~s frequency recovery following a $5\%$ ($15.0$~MW) generation loss. Without storage support, frequency drops rapidly to a nadir of $59.4225$~Hz (a $577.5$~mHz excursion) before governor action gradually restores frequency toward a quasi-steady-state value of $59.750$~Hz. Centralized periodic polling at $100$~ms arrests the decline at $59.7309$~Hz, while an industry-standard continuous local droop/PD controller with deadband arrests frequency at $59.7313$~Hz. Baseline fixed-threshold event-triggered control (FETC) achieves $59.7309$~Hz.
+The 30~s recovery trajectory in Fig.~\ref{fig:main}(a) follows $5\%$ ($15.0$~MW) generation loss. Without storage support, frequency drops rapidly to a nadir of $59.4225$~Hz (a $577.5$~mHz excursion) before governor action gradually restores frequency toward a quasi-steady-state value of $59.750$~Hz. Centralized periodic polling at $100$~ms arrests the decline at $59.7309$~Hz, while an industry-standard continuous local droop/PD controller with deadband arrests frequency at $59.7313$~Hz. Baseline fixed-threshold event-triggered control (FETC) achieves $59.7309$~Hz.
 
 Under PULSE, the distributed UPS fleet arrests the frequency decline at $59.7209$~Hz (and $59.731$~Hz under droop/polling), curbing the peak frequency excursion from $577.5$~mHz to $279.1$~mHz (a $51.7\%$ reduction in frequency drop). Following the nadir at $t \approx 2.3$~s, the secondary turbine governor takes over active power re-balancing, smoothly ramping the mechanical power $\Delta P_m$ while the UPS units taper their output to zero, restoring the grid without overshoot.
 
 \subsection{Sub-Cycle Injection Ramp: Idealized Benchmark vs Realistic Filtering}
 \label{sec:res_subcycle}
 
-Figure~\ref{fig:main}(b) resolves the sub-cycle power ramp over the first $120$~ms post-fault. Under an idealized unfiltered sensing benchmark ($K_d = 55.0$~MW$\cdot$s, zero filter delay), aggregate fleet active injection surges to $90\%$ of its saturated $12.0$~MW capacity in only $7.30$~ms, well within a single $60$~Hz AC cycle ($16.67$~ms).
+The sub-cycle power ramp in Fig.~\ref{fig:main}(b) covers the first $120$~ms post-fault. Under an idealized unfiltered sensing benchmark ($K_d = 55.0$~MW$\cdot$s, zero filter delay), aggregate fleet active injection surges to $90\%$ of its saturated $12.0$~MW capacity in only $7.30$~ms, well within a single $60$~Hz AC cycle ($16.67$~ms).
 
 When subjected to realistic 1-cycle PLL frequency filtering ($\tau_f = 16.7$~ms, $\tau_r = 33.3$~ms; open-loop filter step response $t_{90} = 55.7$~ms) and Gaussian measurement noise ($\sigma_f = 0.5$~mHz) in the linear regime ($K_d = 4.0$~MW$\cdot$s), the aggregate injection reaches $90\%$ of peak support ($8.40$~MW) in a closed-loop rise time of $65.0$~ms. Although slower than the idealized unfiltered benchmark, this $65.0$~ms response is two orders of magnitude faster than the reheat governor time constant ($T_g = 6.0$~s). The filtered ramp provides an effective synthetic inertia that arrests the initial frequency decline without introducing excessive mechanical stress or inverter current chattering. Under a standard 2-cycle P-class PMU ($\tau_f = 33.3$~ms, $\tau_r = 100.0$~ms; open-loop filter step response $t_{90} = 197.6$~ms), closed-loop $90\%$ power injection is attained in $90.5$~ms ($8.56$~MW peak).
 
 \subsection{Communication Overhead: Idle Standby and Active Contingencies}
 \label{sec:res_comm}
 
-Figure~\ref{fig:main}(c) evaluates communication performance over the 30~s horizon. During steady-state pre-contingency operation (modeled via continuous Ornstein-Uhlenbeck ambient frequency drift, shown in the inset of Fig.~\ref{fig:main}(c)), PULSE generates exactly zero communication messages, as frequency fluctuations remain within the $\pm 15.0$~mHz deadband. In contrast, periodic polling at $100$~ms transmits continuously at $10.0$~messages/agent/s, burdening network infrastructure.
+Communication traffic in Fig.~\ref{fig:main}(c) is reported over the 30~s horizon. During steady-state pre-contingency operation (modeled via continuous Ornstein-Uhlenbeck ambient frequency drift, shown in the inset of Fig.~\ref{fig:main}(c)), PULSE generates exactly zero communication messages, as frequency fluctuations remain within the $\pm 15.0$~mHz deadband. In contrast, periodic polling at $100$~ms transmits continuously at $10.0$~messages/agent/s, burdening network infrastructure.
 
 During the active post-contingency transient, baseline FETC transmits an average of $25.79$~messages per agent over a 6~s window ($42.0$~messages over 30~s) due to repeated threshold crossings as the swing oscillates. Under PULSE, the time-relaxing threshold ($\eta_0 = 0.02 \to \eta_{\mathrm{r}} = 0.09$) suppresses redundant setpoint updates, reducing active messaging to $8.58$~messages per agent over 6~s ($13.2$~messages over 30~s). This represents a $63.6\%$ to $66.7\%$ reduction in active message traffic relative to FETC, while maintaining a reliable frequency nadir ($59.7209$~Hz vs $59.7309$~Hz).
 
@@ -391,16 +394,16 @@ During the active post-contingency transient, baseline FETC transmits an average
 \subsection{Pareto Frontier, RoCoF Windows, and Monte Carlo Campaign}
 \label{sec:res_pareto_mc}
 
-Figure~\ref{fig:sens}(a) plots the Pareto frontier of frequency nadir versus message count across threshold values $\eta_0 \in [0.005, 0.150]$. FETC requires between $3.9$ and $117.2$~messages per agent to maintain nadirs of $59.5829$--$59.5986$~Hz. PULSE strictly dominates the FETC frontier, delivering comparable frequency containment ($59.5488$--$59.5972$~Hz) while reducing messaging to only $0.8$--$37.3$~messages per agent (a $68.2\%$ to $78.7\%$ reduction in transmission volume across all threshold points).
+Across threshold values, Fig.~\ref{fig:sens}(a) plots the Pareto frontier of frequency nadir versus message count as $\eta_0 \in [0.005, 0.150]$. FETC requires between $3.9$ and $117.2$~messages per agent to maintain nadirs of $59.5829$--$59.5986$~Hz. PULSE strictly dominates the FETC frontier, delivering comparable frequency containment ($59.5488$--$59.5972$~Hz) while reducing messaging to only $0.8$--$37.3$~messages per agent (a $68.2\%$ to $78.7\%$ reduction in transmission volume across all threshold points).
 
-Figure~\ref{fig:sens}(b) quantifies peak RoCoF across different evaluation windows. Over the initial $100$~ms window, no support produces a peak RoCoF of $-0.4647$~Hz/s, closely matching the theoretical $-0.4688$~Hz/s value. PULSE dampens the $100$~ms RoCoF to $-0.3915$~Hz/s (with 1-cycle PLL reaching $-0.3910$~Hz/s, closely approaching the theoretical $H_v = 1.333$~s linear prediction of $-0.3309$~Hz/s). Over the standard $500$~ms window, PULSE cuts the peak RoCoF from $-0.4414$~Hz/s to $-0.2846$~Hz/s (a $35.5\%$ reduction).
+RoCoF results in Fig.~\ref{fig:sens}(b) compare peak values across different evaluation windows. Over the initial $100$~ms window, no support produces a peak RoCoF of $-0.4647$~Hz/s, closely matching the theoretical $-0.4688$~Hz/s value. PULSE dampens the $100$~ms RoCoF to $-0.3915$~Hz/s (with 1-cycle PLL reaching $-0.3910$~Hz/s, closely approaching the theoretical $H_v = 1.333$~s linear prediction of $-0.3309$~Hz/s). Over the standard $500$~ms window, PULSE cuts the peak RoCoF from $-0.4414$~Hz/s to $-0.2846$~Hz/s (a $35.5\%$ reduction).
 
-Figure~\ref{fig:sens}(c) presents the results of a 50-seed Monte Carlo simulation campaign incorporating independent stochastic agent latencies $\tau_i \sim \mathcal{U}(1, 8)$~ms, random packet drops ($p_{\mathrm{drop}} = 0.05$), log-normal jitter, and Gaussian measurement noise ($\sigma_f = 0.5$~mHz). Across all 50 runs, the frequency nadir is tightly bounded:
+The Monte Carlo results in Fig.~\ref{fig:sens}(c) come from 50 runs with incorporating independent stochastic agent latencies $\tau_i \sim \mathcal{U}(1, 8)$~ms, random packet drops ($p_{\mathrm{drop}} = 0.05$), log-normal jitter, and Gaussian measurement noise ($\sigma_f = 0.5$~mHz). Across all 50 runs, the frequency nadir is tightly bounded:
 \begin{equation}
 f_{\mathrm{nadir}}^{\mathrm{MC}} = 59.5917 \pm 0.0002\,\mathrm{Hz} \quad [\min: 59.5912\,\mathrm{Hz},\; \max: 59.5923\,\mathrm{Hz}].
 \label{eq:mc_stats}
 \end{equation}
-The narrow $\pm 2\sigma$ confidence envelope demonstrates exceptional operational repeatability across randomized communication conditions.
+The $\pm 2\sigma$ confidence envelope spans the reported nadir values across the randomized communication conditions.
 
 \begin{figure}[tbp]
 \centering
@@ -411,9 +414,9 @@ The narrow $\pm 2\sigma$ confidence envelope demonstrates exceptional operationa
 \subsection{Robustness to Packet Loss and Latency Jitter}
 \label{sec:res_comm_robust}
 
-Figure~\ref{fig:comm} assesses PULSE resilience against severe communication channel degradation. Figure~\ref{fig:comm}(a) compares dynamic frequency trajectories with $0\%$ and $20\%$ packet drop rates (both subjected to log-normal latency jitter with spikes up to $50.0$~ms). The curves are virtually indistinguishable during the initial transient and post-nadir recovery.
+Under channel degradation, Fig.~\ref{fig:comm} evaluates PULSE. Panel (a) compares frequency trajectories with $0\%$ and $20\%$ packet drop rates, both with log-normal latency jitter up to $50.0$~ms. The trajectories remain close during the initial transient and post-nadir recovery.
 
-Figure~\ref{fig:comm}(b) sweeps packet loss probability from $0\%$ to $30\%$. The frequency nadir remains remarkably stable: $59.5935$~Hz at $0\%$ loss, $59.5932$~Hz at $5\%$ loss, $59.5931$~Hz at $10\%$ loss, $59.5927$~Hz at $20\%$ loss, and $59.5926$~Hz at $30\%$ loss. The 500~ms RoCoF remains clamped at $0.3573$--$0.3575$~Hz/s across all loss rates. Because the inverter zero-order hold maintains the most recent valid active power command, dropped packets merely prolong the preceding injection state without destabilizing the loop, proving that PULSE does not require complex packet-recovery protocols.
+The packet-loss sweep in Fig.~\ref{fig:comm}(b) covers loss rates from $0\%$ to $30\%$. The frequency nadir ranges from $59.5935$~Hz at $0\%$ loss to $59.5926$~Hz at $30\%$ loss, with intermediate values of $59.5932$~Hz ($5\%$), $59.5931$~Hz ($10\%$), and $59.5927$~Hz ($20\%$). The 500~ms RoCoF ranges from $0.3573$ to $0.3575$~Hz/s. The inverter zero-order hold retains the most recent valid active-power command after packet loss; the simulations remain stable without packet-recovery protocols.
 
 \begin{figure}[tbp]
 \centering
@@ -424,27 +427,27 @@ Figure~\ref{fig:comm}(b) sweeps packet loss probability from $0\%$ to $30\%$. Th
 \subsection{Battery Autonomy and Backup Reserve Preservation}
 \label{sec:res_battery}
 
-Figure~\ref{fig:soc} analyzes the interaction between grid support and data center backup reliability. In Figure~\ref{fig:soc}(a), the SoC-gated fleet with an $80.0\%$ backup reserve floor recovers substantial grid support, arresting the nadir at $59.5918$~Hz despite $39.50\%$ of the agents being quarantined at or below the reserve floor (with a mean fleet availability of $39.39\%$).
+Grid support and backup operation are compared in Fig.~\ref{fig:soc}. In Fig.~\ref{fig:soc}(a), the SoC-gated fleet with an $80.0\%$ reserve floor arrests the nadir at $59.5918$~Hz, with $39.50\%$ of agents at or below the reserve floor and mean fleet availability of $39.39\%$.
 
-Figure~\ref{fig:soc}(b) tracks cumulative electrochemical energy consumption and autonomous IT backup runtime for the fleet over the full 30~s horizon. Total fleet energy throughput is $33.1$~kWh ($0.0331$~MWh), corresponding to $0.1655$~kWh per rack pack ($0.166$~kWh). Under SoC-constrained dispatch, aggregate throughput is $17.95$~kWh ($0.0898$~kWh per rack). Crucially, the autonomous backup runtime for dedicated IT server loads ($P_{\mathrm{IT}} = 30.0$~kW/rack) averages $46.76$~minutes ($46.8$~min) post-event, with a worst-case rack minimum of $40.00$~minutes. Both Tier III ($10.0$~min floor) and Tier IV ($15.0$~min floor) reliability standards achieve $100.00\%$ compliance across all 200 units. Under the Naumann et al.~\cite{naumann2020} aging model, 10 years of service at 180 grid events/year contributes only $2.69$ equivalent full cycles (EFC, $0.269$~EFC/year), inducing a negligible capacity fade increment of $0.01795$ percentage points ($<0.018\%$).
+Over the 30~s horizon, Fig.~\ref{fig:soc}(b) tracks energy use and autonomous IT backup runtime. Total fleet throughput is $33.1$~kWh ($0.0331$~MWh), or $0.1655$~kWh per rack ($0.166$~kWh). Under SoC-constrained dispatch, throughput is $17.95$~kWh ($0.0898$~kWh per rack). Runtime for dedicated IT server loads ($P_{\mathrm{IT}} = 30.0$~kW/rack) averages $46.76$~minutes ($46.8$~min), with a worst-case rack minimum of $40.00$~minutes. All 200 units meet the stated Tier III ($10.0$~min floor) and Tier IV ($15.0$~min floor) runtime thresholds, with $100.00\%$ compliance across all 200 units. Under the Naumann et al.~\cite{naumann2020} aging model, 10 years at 180 grid events/year adds $2.69$ equivalent full cycles (EFC, $0.269$~EFC/year) and an estimated capacity-fade increment of $0.01795$ percentage points ($<0.018\%$).
 
 \begin{figure}[tbp]
 \centering
 \includegraphics[width=\linewidth]{figs/fig5_pmu_gain.png}
-\caption{\textbf{Measurement filtering dynamics and derivative-gain regimes.} (a) Frequency trajectories comparing unfiltered baseline ($K_d = 55.0$) against filtered 1-cycle PLL and 2-cycle PMU sensing ($K_d = 4.0$). (b) Frequency nadir and peak fleet power utilization across derivative gains $K_d \in [2.0, 55.0]$~MW$\cdot$s, demarcating the linear non-saturating regime from the saturated relay regime.}\label{fig:pmu}
+\caption{\textbf{Measurement filtering dynamics and derivative-gain regimes.} (a) Frequency trajectories comparing unfiltered baseline ($K_d = 55.0$) against filtered 1-cycle PLL and 2-cycle PMU sensing ($K_d = 4.0$). (b) Frequency nadir and peak fleet power use across derivative gains $K_d \in [2.0, 55.0]$~MW$\cdot$s, marking the linear non-saturating regime and the saturated relay regime.}\label{fig:pmu}
 \end{figure}
 
 \subsection{PMU/PLL Filtering Dynamics and Derivative Gain Regimes}
 \label{sec:res_gain}
 
-Figure~\ref{fig:pmu}(a) illustrates the profound impact of physical measurement filtering. In the unfiltered high-gain regime ($K_d = 55.0$~MW$\cdot$s), tiny numerical steps in aggregate injection feed back into the derivative $\dot{\Delta f}$, producing severe high-frequency chattering between $1.5$~s and $6.0$~s. In contrast, incorporating 1-cycle PLL or 2-cycle PMU filters completely eliminates derivative chatter, delivering smooth, monotonic frequency recoveries ($59.7309$~Hz and $59.7333$~Hz nadirs).
+Measurement filtering changes the response, as shown in Fig.~\ref{fig:pmu}(a). In the unfiltered high-gain regime ($K_d = 55.0$~MW$\cdot$s), small numerical changes in aggregate injection feed back into the derivative $\dot{\Delta f}$ and produce high-frequency chatter between $1.5$~s and $6.0$~s. With 1-cycle PLL or 2-cycle PMU filters, the simulations show smooth frequency recovery, with nadirs of $59.7309$~Hz and $59.7333$~Hz.
 
-Figure~\ref{fig:pmu}(b) sweeps the synthetic inertia gain $K_d$ from $2.0$ to $55.0$~MW$\cdot$s under 1-cycle PLL filtering. For $K_d \le 4.0$~MW$\cdot$s, the fleet operates within a strictly linear, non-saturating regime where peak aggregate injection scales from $70.91\%$ ($8.51$~MW, nadir $59.7206$~Hz) to $70.00\%$ ($8.40$~MW, nadir $59.7309$~Hz). For $K_d \ge 12.0$~MW$\cdot$s, peak power approaches the $12.0$~MW ($100\%$) saturation ceiling ($99.40\%$ at $K_d = 12.0$, $100.0\%$ at $K_d \ge 25.0$), operating as a non-linear relay. These results prove that PULSE delivers robust frequency support while operating safely within the linear proportional-derivative regime ($K_d = 4.0$~MW$\cdot$s).
+The gain sweep in Fig.~\ref{fig:pmu}(b) varies the synthetic inertia gain $K_d$ from $2.0$ to $55.0$~MW$\cdot$s under 1-cycle PLL filtering. For $K_d \le 4.0$~MW$\cdot$s, the fleet remains in the modeled linear, non-saturating regime; peak aggregate injection ranges from $70.91\%$ ($8.51$~MW, nadir $59.7206$~Hz) to $70.00\%$ ($8.40$~MW, nadir $59.7309$~Hz). For $K_d \ge 12.0$~MW$\cdot$s, peak power approaches the $12.0$~MW ($100\%$) saturation ceiling: $99.40\%$ at $K_d = 12.0$ and $100.0\%$ at $K_d \ge 25.0$. Thus the tested $K_d = 4.0$~MW$\cdot$s case provides support within the linear proportional-derivative regime.
 
 \subsection{Multi-Contingency Inertia Sensitivity Sweep (Experiment A)}
 \label{sec:res_exp_a}
 
-To establish generalizability beyond the nominal 5\% contingency and nominal grid inertia ($H = 3.20$~s), Table~\ref{tab:exp_a_sweep} details a full 9-scenario factorial sweep spanning small (3\%, 9~MW), medium (5\%, 15~MW), and severe (8\%, 24~MW) generation trips under ultra-low ($H = 2.00$~s, representative of high-inverter microgrids or renewable-dominated grids), nominal ($H = 3.20$~s), and high ($H = 5.00$~s, conventional thermal synchronous) inertia regimes.
+To assess cases beyond the nominal 5\% contingency and grid inertia ($H = 3.20$~s), Table~\ref{tab:exp_a_sweep} reports a 9-scenario factorial sweep. It spans small (3\%, 9~MW), medium (5\%, 15~MW), and severe (8\%, 24~MW) generation trips, combined with ultra-low ($H = 2.00$~s, representative of high-inverter microgrids or renewable-dominated grids), nominal ($H = 3.20$~s), and high ($H = 5.00$~s, conventional thermal synchronous) inertia regimes.
 
 \begin{table}[tbp]
 \centering
@@ -470,48 +473,48 @@ Grid Inertia $H$ (s) & Trip $\Delta P_L$ (\%) & Base Nadir (Hz) & PULSE Nadir (H
 }
 \end{table}
 
-The empirical results reveal two fundamental physical trends:
+The sensitivity sweep shows two trends:
 \begin{enumerate}
-    \item \textbf{Disproportionate Value in Low-Inertia Regimes:} Because PULSE contributes a fixed physical virtual inertia $H_v = 1.333$~s, the fractional inertia increase is largest in the low-inertia grid: $+66.7\%$ at $H=2.00$~s ($H_{\mathrm{eff}} = 3.333$~s) versus $+41.7\%$ at $H=3.20$~s and $+26.7\%$ at $H=5.00$~s. Consequently, the nadir lift achieved by PULSE under a 5\% trip reaches $+212.3$~mHz in the ultra-low inertia grid ($59.3049 \to 59.5172$~Hz), compared to $+169.2$~mHz at $H=3.20$~s and $+128.4$~mHz at $H=5.00$~s.
-    \item \textbf{Communication Throttling Across Trip Magnitudes:} Under severe 8\% trips (24~MW loss), the initial transient triggers more updates (10.62--11.34 msgs/agent over 6~s), whereas mild 3\% trips demand only 3.67--6.35 msgs/agent. In all cases, PULSE autonomously scales its communication footprint in proportion to disturbance severity without any supervisory tuning.
+    \item \textbf{Disproportionate Value in Low-Inertia Regimes:} Because PULSE contributes a fixed virtual inertia $H_v = 1.333$~s, its relative contribution is larger at lower grid inertia: $+66.7\%$ at H = 2.00~s ($H_{\mathrm{eff}} = 3.333$~s), compared with $+41.7\%$ at $H=3.20$~s and $+26.7\%$ at $H=5.00$~s. For a 5\% trip, the nadir lift is $+212.3$~mHz at $H=2.00$~s ($59.3049 \to 59.5172$~Hz), $+169.2$~mHz at $H=3.20$~s, and $+128.4$~mHz at $H=5.00$~s.
+    \item \textbf{Communication Throttling Across Trip Magnitudes:} For 8\% trips (24~MW loss), the initial transient triggers 10.62--11.34 messages per agent over 6~s. For 3\% trips, it triggers 3.67--6.35. Message counts therefore increase with disturbance size in the tested cases, without supervisory threshold tuning.
 \end{enumerate}
 
 \subsection{Heterogeneous Rack-Level Battery Fleet Analysis (Experiment B)}
 \label{sec:res_exp_b}
 
-In practical data center deployments, individual battery racks do not possess identical initial state of charge or identical health. Racks commissioned at different intervals undergo disparate capacity fade, while thermal gradients within server halls produce slight charge disparities. To confirm robustness against agent heterogeneity, we evaluate a fully heterogeneous fleet of $N=200$ agents where:
+Rack-level batteries can differ in initial state of charge and capacity because they are commissioned at different times and operate under different thermal conditions. We test a heterogeneous fleet of $N=200$ agents with:
 \begin{itemize}
     \item Individual initial SoCs are uniformly distributed across $\mathrm{SoC}_{i}(0) \sim \mathcal{U}(75.0\%, 95.0\%)$ (mean $84.98\%$).
     \item Individual electrochemical pack capacities are uniformly degraded across $E_{\mathrm{nom}, i} \sim \mathcal{U}(25.0, 30.0)$~kWh (mean $27.47$~kWh, representing up to $16.7\%$ capacity fade from nominal $30.0$~kWh).
 \end{itemize}
 
-Simulating the 30~s frequency-support response under the standard 5\% generation contingency, the heterogeneous fleet achieves a frequency nadir of $59.5918$~Hz, precisely matching the homogeneous fleet benchmark. Active power injection distributes seamlessly: racks with higher initial SoC and capacity naturally provide greater proportional support via the local gating function $a_i(t) = \mathrm{clip}((\mathrm{SoC}_i - 80.0\%)/10.0\%, 0, 1)$, while packs nearing the $80.0\%$ floor autonomously curtail discharge to protect local computing workloads. Following the 30~s event, the fleet preserves a mean autonomous IT backup runtime of $46.76$~minutes, with the most severely degraded rack retaining $40.00$~minutes of uninterrupted runtime. Crucially, both Uptime Institute Tier III ($10.0$~min floor) and Tier IV ($15.0$~min floor) compliance remain at exactly $100.00\%$ across all 200 agents, and the 10-year projected capacity fade increment is constrained to $0.01795\%$. This confirms that PULSE operates with extreme resilience to real-world battery aging and operational heterogeneity.
+In the 30~s response to the standard 5\% generation contingency, the heterogeneous fleet reaches a nadir of $59.5918$~Hz, matching the homogeneous-fleet benchmark. The local gating function $a_i(t) = \mathrm{clip}((\mathrm{SoC}_i - 80.0\%)/10.0\%, 0, 1)$ assigns more support to racks with higher initial SoC and capacity; packs near the $80.0\%$ floor reduce discharge to protect computing workloads. After the event, mean autonomous IT backup runtime is $46.76$~minutes, and the most degraded rack retains $40.00$~minutes. All 200 agents meet the stated Uptime Institute Tier III ($10.0$~min floor) and Tier IV ($15.0$~min floor) runtime thresholds, with $100.00\%$ compliance. The modeled 10-year capacity-fade increment is $0.01795\%$.
 
 \section{Discussion and Practical Deployment Considerations}
 \label{sec:discussion}
 
-The numerical and analytical findings provide key insights into deploying data center UPS fleets for power grid stability:
+The simulations and stability analysis identify communication, sensing, and reserve trade-offs relevant to deployment:
 
 \subsection{Decentralized Communication Scalability}
 \label{sec:disc_comm}
-Conventional SCADA systems polling at $100$~ms consume substantial bandwidth and introduce delay-induced chattering. PULSE eliminates idle-state communication entirely and reduces active transient communication by $63.6\%$ via autonomous threshold relaxation. Because each agent triggers purely on local frequency deviations, the architecture scales seamlessly to thousands of rack units without central communication bottlenecks.
+SCADA polling at $100$~ms maintains a fixed message rate, whereas PULSE sends no messages during the modeled idle period. During the contingency, adaptive threshold relaxation reduces messages by $63.6\%$ relative to FETC. Each rack triggers from its local frequency measurement, avoiding a central communication bottleneck in the modeled architecture.
 
 \subsection{Physical Sensing Dynamics vs Idealized Claims}
 \label{sec:disc_sensing}
-Prior studies claiming sub-cycle ($<10$~ms) synthetic inertia often rely on unmodeled, noiseless derivatives. In physical hardware, PLL phase estimation and PMU filtering require finite windows ($16.7$--$100$~ms). Our findings clarify that while an unfiltered theoretical bound achieves $90\%$ support in $7.3$~ms, realistic 1-cycle PLL filtering delivers $90\%$ power in $65.0$~ms (and $90.5$~ms under 2-cycle PMU filtering). Crucially, this response is more than sufficient to arrest grid frequency decline without chattering.
+Prior studies report response below $<10$~ms under unfiltered assumptions. Practical PLL and PMU filters use finite windows ($16.7$--$100$~ms). The unfiltered model reaches $90\%$ support in $7.3$~ms, but this bound omits measurement filtering. With 1-cycle PLL filtering, the simulated rise time is $65.0$~ms; with 2-cycle PMU filtering, it is $90.5$~ms. Both filtered responses arrest the modeled frequency decline without the derivative chatter observed in the unfiltered high-gain case.
 
 \subsection{High-Assurance Stability Margins}
 \label{sec:disc_stability}
-Stability analysis demonstrates that the closed-loop system possesses an open-loop phase margin of $68.2^\circ$ and an analytical delay margin of $1.58$~s. This guarantee explains why the non-linear simulation exhibited total stability under $30\%$ packet loss and $50$~ms latency jitter.
+The nominal frequency-domain analysis gives an open-loop phase margin of $68.2^\circ$. The idealized no-filter case has a delay margin of at least $1.58$~s. Separate nonlinear simulations remained stable under $30\%$ packet loss and $50$~ms latency jitter.
 
 \subsection{Data Center Mission Alignment and SDG Impact}
 \label{sec:disc_mission}
-Grid support is fundamentally unviable if it threatens server availability. Our battery analysis confirms that a 30~s frequency-support event expends only $0.166$~kWh per rack ($33.1$~kWh total), leaving a mean autonomous backup runtime of $46.8$~min ($40.0$~min minimum, ensuring $100.0\%$ compliance with Tier III and Tier IV standards). The estimated 10-year capacity fade ($0.018\%$) proves that synthetic inertia duty imposes virtually zero electrochemical wear on UPS hardware. By converting idle backup capacity into active low-carbon grid reserves, the proposed paradigm directly advances UN Sustainable Development Goal 7 (Affordable and Clean Energy) and Goal 11 (Sustainable Cities and Communities).
+Grid support must not compromise server availability. In the battery model, a 30~s event uses $0.166$~kWh per rack ($33.1$~kWh total). Mean post-event backup runtime is $46.8$~min, with a $40.0$~min minimum; the modeled fleet meets the stated Tier III and Tier IV runtime thresholds with $100.0\%$ compliance. The projected 10-year capacity-fade increment is $0.018\%$ under the assumed duty cycle. These results describe modeled reserve use and aging; they do not establish field degradation or economic viability. Using idle backup capacity for grid support also aligns with UN Sustainable Development Goal 7 (Affordable and Clean Energy) and Goal 11 (Sustainable Cities and Communities).
 
 \section{Conclusions}
 \label{sec:conclusions}
 
-This paper presented PULSE, a decentralized adaptive event-triggered control framework enabling data center UPS fleets to provide synthetic inertia and primary frequency regulation without centralized dispatch dependencies. In a 300~MVA weak-inertia grid benchmark, a 200-agent UPS fleet ($12$~MW capacity) raises the post-contingency nadir from $59.423$~Hz to $59.721$~Hz ($59.731$~Hz under continuous droop/polling), provides an analytical virtual inertia boost $H_v = 1.333$~s ($+41.7\%$), and reduces the initial 100~ms and 500~ms RoCoF to $-0.392$~Hz/s and $-0.285$~Hz/s, respectively (versus $-0.465$~Hz/s and $-0.441$~Hz/s unsupported). PULSE eliminates steady-state communication and cuts active contingency message counts by $63.6\%$ compared to fixed-threshold schemes. Under realistic 1-cycle PLL and 2-cycle PMU filtering, aggregate power ramps to $90\%$ in $65.0$~ms and $90.5$~ms, respectively (contrasted with the idealized 7.3~ms unfiltered theoretical bound), completely eliminating derivative chattering. A continuous frequency-domain stability analysis proves an analytical delay margin of $1.58$~s, guaranteeing stability against severe packet loss and communication jitter. Furthermore, dynamic battery modeling confirms that frequency support expends only $0.166$~kWh per rack ($33.1$~kWh total), preserving $46.8$~min mean backup runtime ($40.0$~min minimum) and ensuring $100.0\%$ compliance with Uptime Institute Tier III and Tier IV reliability standards. By unleashing pre-capitalized, idle computing infrastructure for clean grid stabilization, this cyber-physical framework advances UN Sustainable Development Goal 7 (Affordable and Clean Energy) and Goal 11 (Sustainable Cities and Communities).
+The simulations indicate that decentralized UPS control can support frequency recovery while preserving the modeled backup reserve. In the 300~MVA benchmark, the 200-agent, $12$~MW fleet changes the nadir from $59.423$~Hz without support to $59.721$~Hz; continuous droop/polling reaches $59.731$~Hz. The model gives $H_v = 1.333$~s ($+41.7\%$) and 100~ms and 500~ms RoCoF values of $-0.392$~Hz/s and $-0.285$~Hz/s, compared with $-0.465$~Hz/s and $-0.441$~Hz/s without support. PULSE sends no idle-state messages and reduces contingency messages by $63.6\%$ relative to FETC. With 1-cycle PLL and 2-cycle PMU filtering, the fleet reaches $90\%$ power in $65.0$~ms and $90.5$~ms, compared with 7.3~ms in the unfiltered benchmark. The frequency-domain calculations and nonlinear packet-loss tests provide separate evidence about delay tolerance; the idealized no-filter calculation gives a delay margin of $1.58$~s, whereas the nominal filtered calculation gives 0.9522~s. In the battery model, support uses $0.166$~kWh per rack ($33.1$~kWh total), leaving a mean backup runtime of $46.8$~min and a minimum of $40.0$~min. The modeled fleet meets Tier III and Tier IV runtime thresholds with $100.0\%$ compliance. These projections warrant hardware validation before claims about field aging or reliability. The results motivate testing UPS-based grid services alongside other measures supporting UN Sustainable Development Goals 7 (Affordable and Clean Energy) and 11 (Sustainable Cities and Communities).
 
 \section*{CRediT authorship contribution statement}
 {\sloppy \textbf{Seyed Mahmoud Sajjadi Mohammadabadi}: Conceptualization, Methodology, Software, Formal analysis, Investigation, Writing -- original draft, Writing -- review \& editing, Visualization.\par}
@@ -522,11 +525,13 @@ This research did not receive any specific grant from funding agencies in the pu
 \section*{Declaration of competing interest}
 The author declares that there are no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
 
-\section*{Declaration of generative AI and AI-assisted technologies in the manuscript preparation process}
-During the preparation of this work, AI-assisted tools were used solely for language editing and grammar polishing. The author reviewed and edited the content and takes full responsibility for the published article.
+\section*{Data Availability}
+No human participants or real patient data were used. All code, random seeds, and scripts needed to reproduce the tables and figures will be made publicly available upon acceptance and are available to the editor and reviewers during review upon request.
+% TODO: Reconcile this required availability statement with the existing public repository and Zenodo archive.
+{\sloppy The simulation code, verification suites, and benchmark datasets are publicly available in the GitHub repository at \url{https://github.com/mahmoudsajjadi/PULSE.git} and archived persistently in Zenodo \cite{pulsedataset2026} at \url{https://doi.org/10.5281/zenodo.14920188}.\par}
 
-\section*{Data availability}
-{\sloppy All simulation code, verification suites, and benchmark datasets are publicly available in the GitHub repository at \url{https://github.com/mahmoudsajjadi/PULSE} and archived persistently in Zenodo \cite{pulsedataset2026} at \url{https://doi.org/10.5281/zenodo.14920188}.\par}
+\section*{Declaration of Generative AI and AI-Assisted Technologies}
+AI assisted with language and grammar checking. The author reviewed all output and independently verified the computational results, taking full responsibility for the article.
 
 \bibliographystyle{elsarticle-num}
 \bibliography{refs}

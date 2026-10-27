@@ -1,6 +1,6 @@
 \documentclass[11pt,a4paper]{article}
 \usepackage[utf8]{inputenc}
-\usepackage[margin=1in]{geometry}
+\usepackage[margin=1.1in]{geometry}
 \usepackage{hyperref}
 \usepackage{charter}
 \usepackage{microtype}
@@ -37,49 +37,47 @@ Dear Professor Chicco and Editorial Board,
 I am pleased to submit my original research manuscript titled:
 
 \begin{center}
-\textbf{``Communication-Aware Event-Triggered Primary Frequency and Synthetic Inertia Support from Data Center UPS Fleets''}
+\large\textbf{``PULSE: Adaptive Event-Triggered Inertia and Frequency Support from Data Center UPS Fleets''}
 \end{center}
 
-for consideration as a Research Article in \textit{Sustainable Energy, Grids and Networks} (SEGAN).
+for consideration for publication in \textit{Sustainable Energy, Grids and Networks} (SEGAN).
+
+\subsubsection*{Context and Motivation}
+In low-carbon power grids, the progressive displacement of synchronous thermal generation by inverter-based renewables severely degrades natural system inertia. Data centers house multi-megawatt electrochemical uninterruptible power supply (UPS) batteries that remain idle for over $99\%$ of their operating life. This manuscript introduces \textbf{PULSE} (\textbf{P}rimary-frequency \textbf{U}PS \textbf{L}ocal \textbf{S}ub-second \textbf{E}vent-triggered control), a communication-aware decentralized framework that mobilizes these distributed battery fleets to provide synthetic inertia and fast frequency support without requiring centralized dispatch.
 
 \subsubsection*{Alignment with SEGAN Aims and Scope}
-This manuscript directly advances several core focus areas specified in the SEGAN Aims and Scope, namely:
-\begin{enumerate}
-    \item \textbf{Control and planning of centralized and distributed energy storage}: Decentralized allocation of fast power reserves across multi-agent battery arrays while strictly respecting local state-of-charge boundaries and mission-critical backup runtime floors.
-    \item \textbf{ICT integration in electrical and energy systems for monitoring and control}: Communication-aware event-triggering over local area networks with imperfect channels subject to packet drop, log-normal jitter, and variable sensing latencies.
-    \item \textbf{Modeling of cyber-physical energy and communication systems}: Unified frequency-domain and time-domain stability formulations coupling physical power-frequency swing dynamics with discrete network protocols.
-    \item \textbf{Demand-side management and demand response: definition of control schemes and protocols}: Harnessing pre-capitalized computing infrastructure to provide clean grid services without requiring dedicated utility-scale land footprint.
-\end{enumerate}
-
-\subsubsection*{Key Methodological and Practical Contributions}
-The paper addresses the challenge of declining synchronous inertia in low-carbon grids by leveraging uninterruptible power supply (UPS) batteries in hyperscale data centers. Crucially, rather than presenting a case study or converter topology design, the paper provides fundamental methodological and computational contributions:
+This work directly addresses core topics within the journal's scope:
 \begin{itemize}
-    \item \textbf{Analytical Tracking and Nadir Degradation Bound}: We derive a closed-form analytical theorem (Section~2.3.1) proving that the worst-case frequency nadir degradation under adaptive event-triggering, network delay, and packet loss is strictly bounded by $|\Delta f_{\mathrm{err}}| \le 8.0\,\mathrm{mHz}$ relative to continuous droop.
-    \item \textbf{Communication-Aware Adaptive Thresholding}: We formulate PULSE (Primary-frequency UPS Local Sub-second Event-triggered control), which eliminates idle-state communication under ambient drift and cuts post-contingency message traffic by $63.6\%$ compared to fixed-threshold schemes.
-    \item \textbf{Analytical Delay Margin and Stability Proof}: Frequency-domain Nyquist and Bode stability analyses establish an open-loop phase margin of $68.2^\circ$ and an analytical delay margin $\tau_{\mathrm{margin}} = 1.58\,\mathrm{s}$, exceeding actual network delays by more than twenty-fold.
-    \item \textbf{Sensing Realism and RoCoF Filtering}: We reframe sub-cycle synthetic inertia by leading with realistic 1-cycle PLL ($65.0\,\mathrm{ms}$) and 2-cycle PMU ($90.5\,\mathrm{ms}$) closed-loop power rise times, avoiding unphysical derivative chattering and inverter saturation.
-    \item \textbf{Battery Autonomy and Degradation Assurance}: Dynamic battery modeling proves that providing 30~s grid support consumes only $0.166\,\mathrm{kWh}$ per rack, maintaining $>40\,\mathrm{min}$ of autonomous IT backup runtime ($100\%$ Tier III/IV compliance) with negligible 10-year cycling wear ($<0.018\%$).
+    \item \textbf{Control of Distributed Energy Storage}: Decentralized coordination of distributed rack-level battery assets under strict local State-of-Charge (SoC) reserve constraints.
+    \item \textbf{ICT Integration and Cyber-Physical Systems}: Event-triggered communication over shared local networks subject to packet loss, variable latencies, and jitter.
+    \item \textbf{Grid Dynamics and Stability}: Rigorous frequency-domain delay margin formulations coupled with power-frequency swing dynamics.
+    \item \textbf{Sustainability (UN SDGs 7 and 11)}: Unlocking pre-capitalized computing infrastructure for clean grid stabilization, displacing carbon-intensive fossil peaker reserves.
 \end{itemize}
 
-\subsubsection*{Contribution to UN Sustainable Development Goals (SDGs)}
-This work directly supports \textbf{UN SDG 7 (Affordable and Clean Energy)} and \textbf{SDG 11 (Sustainable Cities and Communities)} by transforming massive, pre-capitalized, and otherwise idle data center energy storage into low-carbon cyber-physical grid stability reserves, lowering reliance on fossil-fuel peaker plants.
-
-\subsubsection*{Declarations and Submission Details}
+\subsubsection*{Core Contributions and Key Findings}
 \begin{itemize}
-    \item \textbf{Sole Authorship}: The author is the sole contributor and conducted all conceptualization, modeling, simulation, formal analysis, and manuscript preparation.
-    \item \textbf{Originality}: This manuscript is original, has not been published previously, and is not currently under consideration for publication elsewhere.
-    \item \textbf{Conflict of Interest}: The author declares that there are no known competing financial interests or personal relationships that could have appeared to influence this work.
-    \item \textbf{Data Availability}: All simulation code, automated verification suites, and numerical datasets are openly accessible via GitHub and permanently archived on Zenodo with DOI: \href{https://doi.org/10.5281/zenodo.14920188}{10.5281/zenodo.14920188}.
-    \item \textbf{Generative AI Statement}: AI assisted with language editing and grammar polishing. The author reviewed and edited all content and takes full responsibility for the published article.
+    \item \textbf{Zero-Communication Idle State \& 63.6\% Traffic Reduction}: PULSE employs an adaptive, time-relaxing event threshold that sends zero standby messages during normal ambient frequency drift, while cutting contingency communication traffic by $63.6\%$ compared to fixed-threshold schemes.
+    \item \textbf{Realistic Measurement Filtering}: Evaluated under physical 1-cycle PLL ($65.0\,\mathrm{ms}$) and 2-cycle PMU ($90.5\,\mathrm{ms}$) low-pass filters under measurement noise, achieving smooth, non-saturating derivative-droop injection without inverter chattering.
+    \item \textbf{Frequency Stabilization \& Inertia Support}: In a 300~MVA benchmark, 200 distributed agents ($12\,\mathrm{MW}$) arrest a $5\%$ generation trip at $59.721\,\mathrm{Hz}$ (vs. $59.423\,\mathrm{Hz}$ unsupported), providing a $+41.7\%$ virtual inertia boost and improving the 500~ms sliding-window RoCoF from $-0.441\,\mathrm{Hz/s}$ to $-0.285\,\mathrm{Hz/s}$.
+    \item \textbf{Provable Delay Robustness}: Linear frequency-domain stability analysis proves an analytical delay margin of $1.58\,\mathrm{s}$ ($0.952\,\mathrm{s}$ under nominal filtering), verified against severe packet drop and latency jitter.
+    \item \textbf{Guaranteed Data Center IT Reliability}: Delivering a full 30~s frequency response consumes only $0.166\,\mathrm{kWh}$ per rack, maintaining over 40 minutes of autonomous backup runtime and ensuring $100\%$ compliance with Uptime Institute Tier III/IV standards.
 \end{itemize}
 
-Thank you very much for your time and consideration of this manuscript.
+\subsubsection*{Declarations}
+\begin{itemize}
+    \item \textbf{Sole Authorship \& Originality}: The author is the sole contributor. The manuscript is original and has not been submitted or published elsewhere.
+    \item \textbf{Conflict of Interest}: The author declares no competing financial interests or personal relationships.
+    \item \textbf{Data Availability}: All simulation code, verification suites, and reproduction scripts are publicly available on GitHub at \url{https://github.com/mahmoudsajjadi/PULSE} and permanently archived on Zenodo (DOI: \href{https://doi.org/10.5281/zenodo.14920188}{10.5281/zenodo.14920188}).
+    \item \textbf{AI Statement}: AI-assisted tools were used solely for language editing and grammar polishing. The author reviewed and independently verified all contents.
+\end{itemize}
+
+Thank you for your consideration of this manuscript.
 
 \vspace{1em}
 Sincerely,\\[1em]
 \textbf{Seyed Mahmoud Sajjadi Mohammadabadi}\\
 Department of Computer Science and Engineering\\
 University of Nevada, Reno\\
-Email: \href{mailto:mahmoudsajjadi@unr.edu}{mahmoudsajjadi@unr.edu}
+Email: \href{mailto:mahmoud.sajjadi@unr.edu}{mahmoud.sajjadi@unr.edu}
 
 \end{document}
