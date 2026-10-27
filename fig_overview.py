@@ -94,4 +94,6 @@ for k, dy in enumerate([0.12, 0.06, 0.0]):
 fig.tight_layout(pad=0.2)
 fig.savefig("figs/fig0_overview.pdf", bbox_inches="tight")
 fig.savefig("figs/fig0_overview.png", dpi=400, bbox_inches="tight")
-print("Overview figure saved.")
+fig.savefig("figs/graphical_abstract.pdf", bbox_inches="tight")
+fig.savefig("figs/graphical_abstract.png", dpi=400, bbox_inches="tight")
+print("Overview and graphical abstract figures saved.")

@@ -299,14 +299,19 @@ if HAS_NUMBA:
         eta0, eta_rel, tau_relax,
         tau_f, tau_r,
         deadband_pu_val,
-        noise_matrix,    # (N_steps, n_agents) or (1,1)
-        ambient_drift_arr # (N_steps,) or (1,)
+        noise_std_pu,    # float scalar
+        p_drop_val,      # float scalar
+        ambient_drift_arr, # (N_steps,) or (1,)
+        seed_val         # int
     ):
+        if seed_val is not None and seed_val >= 0:
+            np.random.seed(seed_val)
         n_ag = len(tau_steps)
         n_rec = N_steps // downsample
         t_rec = np.zeros(n_rec)
         f_rec = np.zeros(n_rec)
         p_rec = np.zeros(n_rec)
+        p_indiv_rec = np.zeros((n_rec, n_ag))
         soc_rec = np.zeros((n_rec, n_ag))
         runtime_rec = np.zeros((n_rec, n_ag))
         msg_rec = np.zeros(n_rec)
@@ -329,7 +334,7 @@ if HAS_NUMBA:
         p_hold = np.zeros(n_ag)
         last_evt = np.full(n_ag, -1.0)
         
-        f_buf = np.zeros(2048)
+        f_buf = np.zeros(16384)
         f_est = np.zeros(n_ag)
         f_est_prev = np.zeros(n_ag)
         df_est = np.zeros(n_ag)
@@ -345,12 +350,11 @@ if HAS_NUMBA:
         inv_Tg = 1.0 / Tg
         inv_R = 1.0 / R
         inv_Sbase = 1.0 / Sbase
-        has_noise = noise_matrix.shape[0] > 1
         has_amb = ambient_drift_arr.shape[0] > 1
         
         for k in range(N_steps):
             t = k * dt_step
-            f_buf[k % 2048] = f
+            f_buf[k & 0x3FFF] = f
             
             if k >= k_fault and controller_type > 0:
                 for i in range(n_ag):
@@ -364,13 +368,13 @@ if HAS_NUMBA:
                         p_lim = pmax_arr[i]
                     
                     # Sensing with delay & ambient drift
-                    idx = (k - tau_steps[i]) % 2048
+                    idx = (k - tau_steps[i]) & 0x3FFF
                     f_delayed = f_buf[idx]
                     if has_amb:
                         f_delayed += ambient_drift_arr[k - tau_steps[i] if k >= tau_steps[i] else 0]
                     
                     if filter_type > 0:
-                        w = noise_matrix[k, i] if has_noise else 0.0
+                        w = np.random.normal(0.0, noise_std_pu) if noise_std_pu > 0.0 else 0.0
                         f_noisy = f_delayed + w
                         f_new = f_est[i] + (dt_step / tau_f) * (f_noisy - f_est[i])
                         raw_df = (f_new - f_est_prev[i]) / dt_step
@@ -381,7 +385,7 @@ if HAS_NUMBA:
                         f_eff = 0.0 if abs(f_new) <= deadband_pu_val else f_new
                         df_eff = 0.0 if abs(f_new) <= deadband_pu_val else df_est[i]
                     else:
-                        idxm = (k - tau_steps[i] - 1) % 2048
+                        idxm = (k - tau_steps[i] - 1) & 0x3FFF
                         f_eff = f_delayed
                         df_eff = (f_delayed - f_buf[idxm]) / dt_step
                     
@@ -408,9 +412,12 @@ if HAS_NUMBA:
                             trig = True
                             
                     if trig:
-                        p_hold[i] = p_star
+                        if p_drop_val > 0.0 and np.random.random() < p_drop_val:
+                            pass # packet dropped
+                        else:
+                            p_hold[i] = p_star
+                            total_messages += 1
                         last_evt[i] = t
-                        total_messages += 1
                 
                 Pbess_MW = 0.0
                 for i in range(n_ag):
@@ -454,12 +461,13 @@ if HAS_NUMBA:
                 f_rec[rec_idx] = f0 + f * f0
                 p_rec[rec_idx] = Pbess_MW
                 for i in range(n_ag):
+                    p_indiv_rec[rec_idx, i] = p_hold[i]
                     soc_rec[rec_idx, i] = soc_arr[i]
                     runtime_rec[rec_idx, i] = (energy_kWh[i] * eta_dis / P_IT_kW) * 60.0
                 msg_rec[rec_idx] = total_messages / n_ag
                 rec_idx += 1
                 
-        return (t_rec, f_rec, p_rec, soc_rec, runtime_rec, msg_rec,
+        return (t_rec, f_rec, p_rec, p_indiv_rec, soc_rec, runtime_rec, msg_rec,
                 t_zoom, f_zoom, p_zoom,
                 f_min, t_nadir, total_messages, cum_energy_discharged_kWh)
 
@@ -472,13 +480,16 @@ def _sfr_core_numpy(
     kd, kp, poll_period_steps,
     eta0, eta_rel, tau_relax,
     tau_f, tau_r, deadband_pu_val,
-    noise_matrix, ambient_drift_arr
+    noise_std_pu, p_drop_val, ambient_drift_arr,
+    seed_val
 ):
+    rng = np.random.default_rng(seed_val if seed_val is not None and seed_val >= 0 else None)
     n_ag = len(tau_steps)
     n_rec = N_steps // downsample
     t_rec = np.zeros(n_rec)
     f_rec = np.zeros(n_rec)
     p_rec = np.zeros(n_rec)
+    p_indiv_rec = np.zeros((n_rec, n_ag))
     soc_rec = np.zeros((n_rec, n_ag))
     runtime_rec = np.zeros((n_rec, n_ag))
     msg_rec = np.zeros(n_rec)
@@ -501,7 +512,7 @@ def _sfr_core_numpy(
     p_hold = np.zeros(n_ag)
     last_evt = np.full(n_ag, -1.0)
     
-    f_buf = np.zeros(2048)
+    f_buf = np.zeros(16384)
     f_est = np.zeros(n_ag)
     f_est_prev = np.zeros(n_ag)
     df_est = np.zeros(n_ag)
@@ -517,12 +528,11 @@ def _sfr_core_numpy(
     inv_Tg = 1.0 / Tg
     inv_R = 1.0 / R
     inv_Sbase = 1.0 / Sbase
-    has_noise = noise_matrix.shape[0] > 1
     has_amb = ambient_drift_arr.shape[0] > 1
     
     for k in range(N_steps):
         t = k * dt_step
-        f_buf[k % 2048] = f
+        f_buf[k & 0x3FFF] = f
         
         if k >= k_fault and controller_type > 0:
             if battery_type >= 1:
@@ -531,13 +541,13 @@ def _sfr_core_numpy(
             else:
                 p_lim = pmax_arr
                 
-            idx = (k - tau_steps) % 2048
+            idx = (k - tau_steps) & 0x3FFF
             f_delayed = f_buf[idx]
             if has_amb:
                 f_delayed += ambient_drift_arr[np.maximum(0, k - tau_steps)]
                 
             if filter_type > 0:
-                w = noise_matrix[k, :] if has_noise else 0.0
+                w = rng.normal(0.0, noise_std_pu, n_ag) if noise_std_pu > 0.0 else 0.0
                 f_noisy = f_delayed + w
                 f_new = f_est + (dt_step / tau_f) * (f_noisy - f_est)
                 raw_df = (f_new - f_est_prev) / dt_step
@@ -548,7 +558,7 @@ def _sfr_core_numpy(
                 f_eff = np.where(np.abs(f_new) <= deadband_pu_val, 0.0, f_new)
                 df_eff = np.where(np.abs(f_new) <= deadband_pu_val, 0.0, df_est)
             else:
-                idxm = (k - tau_steps - 1) % 2048
+                idxm = (k - tau_steps - 1) & 0x3FFF
                 f_eff = f_delayed
                 df_eff = (f_delayed - f_buf[idxm]) / dt_step
                 
@@ -569,9 +579,16 @@ def _sfr_core_numpy(
                 trig = np.zeros(n_ag, dtype=bool)
                 
             if np.any(trig):
-                p_hold[trig] = p_star[trig]
+                if p_drop_val > 0.0:
+                    trig_idx = np.where(trig)[0]
+                    dropped = rng.random(trig_idx.size) < p_drop_val
+                    delivered_idx = trig_idx[~dropped]
+                    p_hold[delivered_idx] = p_star[delivered_idx]
+                    total_messages += int(delivered_idx.size)
+                else:
+                    p_hold[trig] = p_star[trig]
+                    total_messages += int(np.sum(trig))
                 last_evt[trig] = t
-                total_messages += int(np.sum(trig))
             Pbess_MW = np.sum(p_hold)
             p_dis = np.maximum(0.0, p_hold)
             cum_energy_discharged_kWh += p_dis * 1000.0 * (dt_step / 3600.0)
@@ -604,17 +621,18 @@ def _sfr_core_numpy(
             t_rec[rec_idx] = t
             f_rec[rec_idx] = f0 + f * f0
             p_rec[rec_idx] = Pbess_MW
+            p_indiv_rec[rec_idx, :] = p_hold
             soc_rec[rec_idx, :] = soc_arr
             runtime_rec[rec_idx, :] = (energy_kWh * eta_dis / P_IT_kW) * 60.0
             msg_rec[rec_idx] = total_messages / n_ag
             rec_idx += 1
             
-    return (t_rec, f_rec, p_rec, soc_rec, runtime_rec, msg_rec,
+    return (t_rec, f_rec, p_rec, p_indiv_rec, soc_rec, runtime_rec, msg_rec,
             t_zoom, f_zoom, p_zoom,
             f_min, t_nadir, total_messages, cum_energy_discharged_kWh)
 
 # =============================================================
-# 5. Master Simulation API: run_sfr_simulation (M1 ↔ M2 Contract)
+# 5. Master Simulation API: run_sfr_simulation (M1 <-> M2 Contract)
 # =============================================================
 def run_sfr_simulation(
     horizon=30.0,
@@ -636,13 +654,19 @@ def run_sfr_simulation(
     soc_seed=42,
     downsample_factor=20,
     t_fault=0.100,
+    eta=None,
+    eta_nom=None,
+    eta_rel=None,
+    tau_relax=None,
+    n_agents=None,
 ):
     """
     Unified System Frequency Response simulation engine covering 30s horizon.
-    Fulfills M1 ↔ M2 interface contract defined in PROJECT.md.
+    Fulfills M1 <-> M2 interface contract defined in PROJECT.md.
     """
     rng = np.random.default_rng(seed)
     N_steps = int(round(horizon / dt))
+    n_ag = int(n_agents) if n_agents is not None else globals().get("n_agents", 200)
     
     # Map controller mode
     mode_map = {
@@ -668,15 +692,25 @@ def run_sfr_simulation(
     tau_r = cfg["tau_r"]
     db_pu = (deadband_hz if filter_type > 0 else 0.0) / f0
     
-    # Latencies (fixed topology by default, stochastic if latency_seed=None or varied)
+    # Latencies
     lat_rng = np.random.default_rng(latency_seed if latency_seed is not None else seed)
-    tau_s = lat_rng.uniform(1e-3, 8e-3, n_agents)
+    tau_s = lat_rng.uniform(1e-3, 8e-3, n_ag)
+    if jitter_scale_ms > 0.0:
+        jitter = lat_rng.lognormal(mean=np.log(max(1e-4, jitter_scale_ms * 1e-3 * 0.5)), sigma=0.5, size=n_ag)
+        tau_s = np.clip(tau_s + jitter, 1e-3, 0.800)
     tau_steps = np.round(tau_s / dt).astype(int)
+    
+    # Threshold parameters
+    if eta is not None and eta_nom is None:
+        eta_nom = eta
+    e_nom = float(eta_nom) if eta_nom is not None else 0.02
+    e_rel = float(eta_rel) if eta_rel is not None else max(e_nom * 4.5, 0.09)
+    t_relax = float(tau_relax) if tau_relax is not None else 0.6
     
     # Battery initialization
     s_rng = np.random.default_rng(soc_seed if soc_seed is not None else seed)
-    soc_arr = s_rng.uniform(70.0, 95.0, n_agents)
-    pmax_arr = np.full(n_agents, Pmax_agent)
+    soc_arr = s_rng.uniform(70.0, 95.0, n_ag)
+    pmax_arr = np.full(n_ag, Pmax_agent)
     
     # Ambient drift
     if ambient_drift:
@@ -690,12 +724,7 @@ def run_sfr_simulation(
     else:
         ambient_drift_arr = np.zeros(1)
         
-    # Measurement noise
-    if filter_type > 0 and noise_std_hz > 0.0:
-        noise_matrix = rng.normal(0.0, noise_std_hz / f0, (N_steps, n_agents))
-    else:
-        noise_matrix = np.zeros((1, 1))
-        
+    noise_std_pu = (noise_std_hz if (filter_type > 0 and noise_std_hz > 0.0) else 0.0) / f0
     poll_steps = max(1, int(round(poll_period / dt)))
     
     # Choose kernel (Numba if available, else NumPy)
@@ -710,18 +739,19 @@ def run_sfr_simulation(
         controller_type, filter_type, battery_type,
         tau_steps, soc_arr.copy(), pmax_arr,
         kd, kp, poll_steps,
-        eta_nom, eta_rel, tau_relax,
+        e_nom, e_rel, t_relax,
         tau_f, tau_r, db_pu,
-        noise_matrix, ambient_drift_arr
+        noise_std_pu, float(p_drop), ambient_drift_arr,
+        int(seed)
     )
     
-    (t_rec, f_rec, p_rec, soc_rec, runtime_rec, msg_rec,
+    (t_rec, f_rec, p_rec, p_indiv_rec, soc_rec, runtime_rec, msg_rec,
      t_zoom, f_zoom, p_zoom,
-     f_min, t_nadir, total_msgs, cum_energy_discharged) = out
+     f_min, t_nadir, total_messages, cum_energy_discharged) = out
      
     nadir_hz = float(f0 + f_min * f0)
-    h_v_s = float((n_agents * kd) / (2.0 * Sbase)) if controller_type > 0 else 0.0
-    d_v_pu = float((n_agents * kp) / Sbase) if controller_type > 0 else 0.0
+    h_v_s = float((n_ag * kd) / (2.0 * Sbase)) if controller_type > 0 else 0.0
+    d_v_pu = float((n_ag * kp) / Sbase) if controller_type > 0 else 0.0
     
     # Dual sliding-window RoCoF
     dt_dec = dt * downsample_factor
@@ -754,82 +784,88 @@ def run_sfr_simulation(
         "energy_discharged_mean_kWh": energy_per_rack_kWh,
         "energy_discharged_total_kWh": total_energy_kWh
     }
+
+    # Dynamic Battery Availability & Tier Compliance Metrics
+    soc_0 = soc_rec[0, :]
+    avail_0 = np.clip((soc_0 - soc_min_reserve) / soc_margin, 0.0, 1.0)
+    soc_mean_avail_pct = float(100.0 * np.mean(avail_0))
+    soc_frac_fully_reserved_pct = float(100.0 * np.mean(avail_0 == 0.0))
+    final_runtime = runtime_rec[-1, :]
+    tier3_compliance_pct = float(100.0 * np.mean(final_runtime >= t_tier3_min))
+    tier4_compliance_pct = float(100.0 * np.mean(final_runtime >= t_tier4_min))
     
     return {
         "t_s": t_rec,
         "f_hz": f_rec,
         "p_mw": p_rec,
-        "p_individual": np.zeros((len(t_rec), 1)), # lightweight 1-col placeholder for interface compliance
+        "p_individual": p_indiv_rec,
         "rocof_100ms": rocof_100ms_trace,
         "rocof_500ms": rocof_500ms_trace,
         "soc_pct": soc_rec,
         "runtime_min": runtime_rec,
         "cum_msgs": msg_rec,
-        "msg_count_total": float(total_msgs),
-        "msg_count_per_agent": float(total_msgs / n_agents),
+        "msg_count_total": float(total_messages),
+        "msg_count_per_agent": float(total_messages / n_ag),
         "nadir_hz": nadir_hz,
         "t_nadir_s": float(t_nadir),
+        "peak_rocof_100ms": float(peak_rocof_100),
+        "peak_rocof_500ms": float(peak_rocof_500),
         "t90_ms": t90_ms,
         "h_v_s": h_v_s,
         "d_v_pu": d_v_pu,
-        "peak_rocof_100ms": peak_rocof_100,
-        "peak_rocof_500ms": peak_rocof_500,
         "energy_throughput_mwh": energy_throughput_mwh,
         "energy_throughput_per_rack_kwh": energy_per_rack_kWh,
         "degradation": degradation,
         "t_zoom": t_zoom,
+        "p_zoom": p_zoom,
         "f_zoom": f_zoom,
-        "p_zoom": p_zoom
-    }
-
-# Backward compatible simulate_grid wrapper
-def simulate_grid(mode="pulse", dPL_val=dPL_nom, Kd_val=Kd_nom, Kp_val=Kp_nom,
-                  poll_period=0.100, eta_val=eta_nom, eta_r_val=eta_rel,
-                  tau_f=0.0167, tau_r=0.0333, noise_std_hz=0.0005,
-                  p_drop=0.0, jitter_max_ms=0.0, soc_gating=False,
-                  ambient_drift=False, seed=7, Tend_sim=Tend):
-    """Backward-compatible wrapper returning (f_trace, pbess_trace, cum_msgs_trace)."""
-    filter_mode = "idealized" if tau_f == 0.0 else ("pmu_2cycle" if tau_f > 0.025 else "pll_1cycle")
-    bat_model = "dynamic_kwh" if soc_gating else "unconstrained"
-    contingency_frac = dPL_val / Sbase
-    res = run_sfr_simulation(
-        horizon=Tend_sim, dt=dt, contingency_frac=contingency_frac,
-        controller_mode=mode, filter_mode=filter_mode,
-        kd=Kd_val, kp=Kp_val, battery_model=bat_model,
-        poll_period=poll_period, p_drop=p_drop, jitter_scale_ms=jitter_max_ms,
-        noise_std_hz=noise_std_hz, deadband_hz=deadband_hz,
-        ambient_drift=ambient_drift, seed=seed,
-        downsample_factor=downsample_factor, t_fault=t_fault
-    )
-    f_pu = res["f_hz"] / f0 - 1.0
-    cum_msgs = np.full_like(res["t_s"], res["msg_count_per_agent"])
-    return f_pu, res["p_mw"], cum_msgs
-
-def run_soc_constrained(dPL_frac=0.05, n_bins=5, horizon=30.0, dt_step=dt,
-                        Kd_val=Kd_nom, Kp_val=Kp_nom, downsample_interval=downsample_factor):
-    """Backward-compatible wrapper for dynamic battery SoC power-sharing analysis."""
-    res = run_sfr_simulation(
-        horizon=horizon, dt=dt_step, contingency_frac=dPL_frac,
-        controller_mode="pulse_adaptive", filter_mode="pll_1cycle",
-        kd=Kd_val, kp=Kp_val, battery_model="dynamic_kwh",
-        downsample_factor=downsample_interval, seed=42
-    )
-    final_runtime = res["runtime_min"][-1, :]
-    return {
-        "f_trace": res["f_hz"] / f0 - 1.0,
-        "pbess_trace": res["p_mw"],
-        "nadir_hz": res["nadir_hz"],
-        "mean_avail_pct": 39.39,
-        "frac_fully_reserved": 39.50,
-        "t_down": res["t_s"],
-        "soc_down": res["soc_pct"],
-        "runtime_down": res["runtime_min"],
-        "degradation": res["degradation"],
+        "soc_mean_avail_pct": soc_mean_avail_pct,
+        "soc_frac_fully_reserved_pct": soc_frac_fully_reserved_pct,
+        "mean_avail_pct": soc_mean_avail_pct,
+        "frac_fully_reserved": soc_frac_fully_reserved_pct,
+        "tier3_compliance_pct": tier3_compliance_pct,
+        "tier4_compliance_pct": tier4_compliance_pct,
         "runtime_min_final_mean": float(final_runtime.mean()),
         "runtime_min_final_min": float(final_runtime.min()),
-        "tier3_compliance_pct": 100.0,
-        "tier4_compliance_pct": 100.0
     }
+
+
+def run_soc_constrained(
+    dPL_frac=0.05,
+    n_bins=5,
+    horizon=30.0,
+    dt_step=5e-5,
+    Kd_val=4.0,
+    Kp_val=9.0,
+    downsample_interval=20,
+    seed=42,
+    soc_seed=None,
+    **kwargs
+):
+    """Simulate fleet response with dynamic physical battery energy integration,
+    SoC-aware reserve protection, and IT runtime tracking.
+    """
+    res = run_sfr_simulation(
+        horizon=horizon,
+        dt=dt_step,
+        contingency_frac=dPL_frac,
+        controller_mode="pulse_adaptive",
+        filter_mode="pll_1cycle",
+        kd=Kd_val,
+        kp=Kp_val,
+        battery_model="dynamic_kwh",
+        seed=seed,
+        soc_seed=soc_seed if soc_seed is not None else seed,
+        downsample_factor=downsample_interval,
+        **kwargs
+    )
+    res["mean_avail_pct"] = res["soc_mean_avail_pct"]
+    res["frac_fully_reserved"] = res["soc_frac_fully_reserved_pct"]
+    res["f_trace"] = res["f_hz"]
+    res["pbess_trace"] = res["p_mw"]
+    res["soc_trace"] = res["soc_pct"]
+    res["runtime_trace"] = res["runtime_min"]
+    return res
 
 # =============================================================
 # 6. Main Execution Script & Publication Figures Generation
@@ -848,28 +884,32 @@ if __name__ == "__main__":
 
     print("\n--- 1. Executing Core Scenarios (30.0s Horizon) ---")
     # 1. Base comparisons
-    res_base = run_sfr_simulation(horizon=30.0, controller_mode="none", filter_mode="idealized", battery_model="unconstrained")
-    res_droop = run_sfr_simulation(horizon=30.0, controller_mode="industry_droop", filter_mode="pll_1cycle", kd=Kd_nom, battery_model="unconstrained")
-    res_poll100 = run_sfr_simulation(horizon=30.0, controller_mode="periodic_poll", poll_period=0.100, filter_mode="idealized", kd=Kd_sat, battery_model="unconstrained")
-    res_poll20 = run_sfr_simulation(horizon=30.0, controller_mode="periodic_poll", poll_period=0.020, filter_mode="idealized", kd=Kd_sat, battery_model="unconstrained")
-    res_fetc = run_sfr_simulation(horizon=30.0, controller_mode="fetc_fixed", filter_mode="idealized", kd=Kd_sat, battery_model="unconstrained")
-    res_pulse = run_sfr_simulation(horizon=30.0, controller_mode="pulse_adaptive", filter_mode="idealized", kd=Kd_sat, battery_model="unconstrained")
+    res_base = run_sfr_simulation(horizon=30.0, controller_mode="none", filter_mode="pll_1cycle", seed=42)
+    res_droop = run_sfr_simulation(horizon=30.0, controller_mode="industry_droop", filter_mode="pll_1cycle", kd=Kd_nom, kp=Kp_nom, battery_model="unconstrained", seed=42)
+    res_poll100 = run_sfr_simulation(horizon=30.0, controller_mode="periodic_poll", poll_period=0.100, filter_mode="pll_1cycle", kd=Kd_nom, kp=Kp_nom, battery_model="unconstrained", seed=42)
+    res_poll50 = run_sfr_simulation(horizon=30.0, controller_mode="periodic_poll", poll_period=0.050, filter_mode="pll_1cycle", kd=Kd_nom, kp=Kp_nom, battery_model="unconstrained", seed=42)
+    res_poll20 = run_sfr_simulation(horizon=30.0, controller_mode="periodic_poll", poll_period=0.020, filter_mode="pll_1cycle", kd=Kd_nom, kp=Kp_nom, battery_model="unconstrained", seed=42)
+    res_poll10 = run_sfr_simulation(horizon=30.0, controller_mode="periodic_poll", poll_period=0.010, filter_mode="pll_1cycle", kd=Kd_nom, kp=Kp_nom, battery_model="unconstrained", seed=42)
+    res_fetc = run_sfr_simulation(horizon=30.0, controller_mode="fetc_fixed", filter_mode="pll_1cycle", kd=Kd_nom, kp=Kp_nom, battery_model="unconstrained", seed=42)
+    res_pulse = run_sfr_simulation(horizon=30.0, controller_mode="pulse_adaptive", filter_mode="pll_1cycle", kd=Kd_nom, kp=Kp_nom, battery_model="unconstrained", seed=42)
     
     # Idealized unconstrained high-gain benchmark (7.4 ms rise time)
-    res_ideal = run_sfr_simulation(horizon=30.0, controller_mode="fetc_fixed", filter_mode="idealized", kd=Kd_sat, battery_model="unconstrained")
+    res_ideal = run_sfr_simulation(horizon=30.0, controller_mode="fetc_fixed", filter_mode="idealized", kd=Kd_sat, kp=Kp_nom, battery_model="unconstrained", seed=42)
 
     # 1-cycle PLL and 2-cycle PMU benchmarks (Kd=4.0, non-saturating linear regime)
-    res_pll = run_sfr_simulation(horizon=30.0, controller_mode="fetc_fixed", filter_mode="pll_1cycle", kd=Kd_nom, battery_model="unconstrained", seed=101)
-    res_pmu = run_sfr_simulation(horizon=30.0, controller_mode="fetc_fixed", filter_mode="pmu_2cycle", kd=Kd_nom, battery_model="unconstrained", seed=101)
+    res_pll = run_sfr_simulation(horizon=30.0, controller_mode="fetc_fixed", filter_mode="pll_1cycle", kd=Kd_nom, kp=Kp_nom, battery_model="unconstrained", seed=101)
+    res_pmu = run_sfr_simulation(horizon=30.0, controller_mode="fetc_fixed", filter_mode="pmu_2cycle", kd=Kd_nom, kp=Kp_nom, battery_model="unconstrained", seed=101)
 
     # Dynamic Battery SoC constrained run (80% reserve floor, Tier III/IV compliance)
-    res_soc = run_sfr_simulation(horizon=30.0, controller_mode="pulse_adaptive", filter_mode="pll_1cycle", kd=Kd_nom, battery_model="dynamic_kwh", seed=42)
+    res_soc = run_sfr_simulation(horizon=30.0, controller_mode="pulse_adaptive", filter_mode="pll_1cycle", kd=Kd_nom, kp=Kp_nom, battery_model="dynamic_kwh", seed=42)
 
     # Extract Metrics
     nadir_base = res_base["nadir_hz"]
     nadir_droop = res_droop["nadir_hz"]
     nadir_poll100 = res_poll100["nadir_hz"]
+    nadir_poll50 = res_poll50["nadir_hz"]
     nadir_poll20 = res_poll20["nadir_hz"]
+    nadir_poll10 = res_poll10["nadir_hz"]
     nadir_fetc = res_fetc["nadir_hz"]
     nadir_pulse = res_pulse["nadir_hz"]
     nadir_ideal = res_ideal["nadir_hz"]
@@ -892,9 +932,11 @@ if __name__ == "__main__":
     print(f"Nadir [Local Droop/PD]: {nadir_droop:.4f} Hz | Autonomous continuous (0 comms)")
     print(f"Nadir [Periodic 100ms]: {nadir_poll100:.4f} Hz | msgs/agent: {res_poll100['msg_count_per_agent']:.1f}")
     print(f"Nadir [Periodic 20ms]:  {nadir_poll20:.4f} Hz | msgs/agent: {res_poll20['msg_count_per_agent']:.1f}")
+    print(f"Nadir [Periodic 10ms]:  {nadir_poll10:.4f} Hz | msgs/agent: {res_poll10['msg_count_per_agent']:.1f}")
     print(f"Nadir [FETC (Fixed)]:   {nadir_fetc:.4f} Hz | msgs/agent: {res_fetc['msg_count_per_agent']:.1f}")
-    print(f"Nadir [PULSE (Adapt)]:  {nadir_pulse:.4f} Hz | msgs/agent: {res_pulse['msg_count_per_agent']:.1f} (saving {100*(1-res_pulse['msg_count_per_agent']/res_fetc['msg_count_per_agent']):.1f}%)")
-    print(f"Nadir [SoC Protected]:  {nadir_soc:.4f} Hz | Tier III/IV compliance: 100.0%")
+    saving_pct = 100.0 * (1.0 - res_pulse['msg_count_per_agent'] / max(1e-3, res_fetc['msg_count_per_agent']))
+    print(f"Nadir [PULSE (Adapt)]:  {nadir_pulse:.4f} Hz | msgs/agent: {res_pulse['msg_count_per_agent']:.1f} (saving {saving_pct:.1f}%)")
+    print(f"Nadir [SoC Protected]:  {nadir_soc:.4f} Hz | Tier III: {res_soc['tier3_compliance_pct']:.1f}% | Tier IV: {res_soc['tier4_compliance_pct']:.1f}%")
     print(f"Response Time t90:      {t90_pll_ms:.1f} ms (1-cycle PLL) vs {t90_ideal_ms:.1f} ms (idealized benchmark)")
     print(f"Virtual Inertia H_v:    {H_v_nom:.4f} s (+41.67% boost) | Virtual Damping D_v = {D_v_nom:.2f} pu")
 
@@ -908,12 +950,12 @@ if __name__ == "__main__":
     pareto_pulse_nadir, pareto_pulse_msgs = [], []
 
     for ev in eta_sweep_vals:
-        ev_seed = int(ev * 1000)
-        rf = run_sfr_simulation(horizon=10.0, controller_mode="fetc_fixed", kd=Kd_nom, seed=ev_seed)
+        ev_seed = int(ev * 1000) + 1
+        rf = run_sfr_simulation(horizon=10.0, controller_mode="fetc_fixed", filter_mode="pll_1cycle", kd=Kd_nom, eta=ev, eta_nom=ev, seed=ev_seed)
         pareto_fetc_nadir.append(rf["nadir_hz"])
         pareto_fetc_msgs.append(rf["msg_count_per_agent"])
         
-        rp = run_sfr_simulation(horizon=10.0, controller_mode="pulse_adaptive", kd=Kd_nom, seed=ev_seed)
+        rp = run_sfr_simulation(horizon=10.0, controller_mode="pulse_adaptive", filter_mode="pll_1cycle", kd=Kd_nom, eta=ev, eta_nom=ev, eta_rel=ev * 4.5, seed=ev_seed)
         pareto_pulse_nadir.append(rp["nadir_hz"])
         pareto_pulse_msgs.append(rp["msg_count_per_agent"])
 
@@ -922,7 +964,7 @@ if __name__ == "__main__":
     mc_nadirs = []
     mc_traces = []
     for s_idx in range(n_mc):
-        rmc = run_sfr_simulation(horizon=15.0, controller_mode="pulse_adaptive", filter_mode="pll_1cycle", kd=Kd_nom, seed=2000 + s_idx)
+        rmc = run_sfr_simulation(horizon=15.0, controller_mode="pulse_adaptive", filter_mode="pll_1cycle", kd=Kd_nom, p_drop=0.05, jitter_scale_ms=10.0, seed=2000 + s_idx)
         mc_nadirs.append(rmc["nadir_hz"])
         mc_traces.append(rmc["f_hz"])
     mc_nadirs = np.array(mc_nadirs)
@@ -935,12 +977,15 @@ if __name__ == "__main__":
     packet_loss_grid = [0.0, 0.05, 0.10, 0.20, 0.30]
     loss_nadirs, loss_rocofs = [], []
     f_loss_dict = {}
+    t_loss_arr = None
     for pd_ in packet_loss_grid:
-        rl = run_sfr_simulation(horizon=10.0, controller_mode="pulse_adaptive", p_drop=pd_, jitter_scale_ms=50.0, seed=int(pd_*100))
+        rl = run_sfr_simulation(horizon=10.0, controller_mode="pulse_adaptive", filter_mode="pll_1cycle", kd=Kd_nom, p_drop=pd_, jitter_scale_ms=50.0, seed=int(pd_*100) + 1)
         loss_nadirs.append(rl["nadir_hz"])
         loss_rocofs.append(abs(rl["peak_rocof_500ms"]))
         if pd_ in (0.0, 0.20):
             f_loss_dict[pd_] = rl["f_hz"]
+        if t_loss_arr is None:
+            t_loss_arr = rl["t_s"]
 
     kd_grid = [2.0, 4.0, 6.0, 8.0, 12.0, 25.0, 55.0]
     kd_nadirs, kd_peaks_pct = [], []
@@ -959,7 +1004,7 @@ if __name__ == "__main__":
     # Figure 1: 30-Second Recovery & Sub-Cycle Injection
     print("Plotting Figure 1 (figs/fig1_response.pdf/.png)...")
     fig1 = plt.figure(figsize=(7.2, 2.75))
-    gs1 = fig1.add_gridspec(1, 3, width_ratios=[1.15, 0.85, 1.05], wspace=0.45)
+    gs1 = fig1.add_gridspec(1, 3, width_ratios=[1.15, 0.85, 1.05], wspace=0.48)
 
     ax1a = fig1.add_subplot(gs1[0])
     ax1a.plot(t_plot_30[mask_30], res_base["f_hz"][mask_30], color="0.55", lw=1.1, label="No support")
@@ -970,7 +1015,7 @@ if __name__ == "__main__":
     ax1a.set_xlabel("Time since contingency (s)")
     ax1a.set_ylabel("Frequency (Hz)")
     ax1a.set_xlim(-0.5, 29.0)
-    ax1a.set_ylim(59.35, 60.05)
+    ax1a.set_ylim(59.35, 60.12)
     ax1a.legend(fontsize=5.6, frameon=False, loc="lower right")
     ax1a.set_title("(a) Complete 30 s recovery", fontsize=8.5)
 
@@ -978,14 +1023,15 @@ if __name__ == "__main__":
     t_zoom_ms = (res_ideal["t_zoom"] - t_fault) * 1000.0
     mask_zoom = (t_zoom_ms >= -2) & (t_zoom_ms <= 120)
     ax1b.plot(t_zoom_ms[mask_zoom], res_ideal["p_zoom"][mask_zoom], color="0.5", lw=1.0, ls="--", label="Idealized benchmark (7.4 ms)")
-    ax1b.plot(t_zoom_ms[mask_zoom], res_pll["p_zoom"][mask_zoom], color="#C44E52", lw=1.3, label="Filtered PLL (55.7 ms)")
+    ax1b.plot(t_zoom_ms[mask_zoom], res_pll["p_zoom"][mask_zoom], color="#C44E52", lw=1.3, label=f"Filtered PLL ({t90_pll_ms:.1f} ms)")
     ax1b.axvline(16.67, color="k", lw=0.5, ls=":")
     ax1b.text(18.0, 3.0, "1 cyc", fontsize=5.8, color="k")
     ax1b.set_xlabel("Time since contingency (ms)")
     ax1b.set_ylabel("Fleet injection (MW)")
     ax1b.set_xlim(-2, 120)
-    ax1b.set_ylim(-0.5, 13.0)
-    ax1b.legend(fontsize=5.2, frameon=False, loc="upper right")
+    ax1b.set_ylim(-0.5, 14.0)
+    ax1b.set_yticks([0, 2, 4, 6, 8, 10, 12])
+    ax1b.legend(fontsize=5.2, frameon=True, facecolor="white", framealpha=0.90, edgecolor="none", loc="upper right")
     ax1b.set_title("(b) Dynamic injection ramp", fontsize=8.5)
 
     ax1c = fig1.add_subplot(gs1[2])
@@ -998,13 +1044,17 @@ if __name__ == "__main__":
     ax1c.legend(fontsize=5.6, frameon=False, loc="upper left")
     ax1c.set_title("(c) Cumulative communication", fontsize=8.5)
 
-    # Inset on Panel (c) showing idle window ambient frequency drift
-    ax1c_in = ax1c.inset_axes([0.48, 0.15, 0.48, 0.38])
+    # Inset on Panel (c) showing idle window ambient frequency drift positioned cleanly between curves
+    ax1c_in = ax1c.inset_axes([0.64, 0.22, 0.32, 0.24])
+    ax1c_in.patch.set_facecolor("white")
+    ax1c_in.patch.set_alpha(0.95)
     t_idle_plot = res_amb["t_s"] - 1.0
     ax1c_in.plot(t_idle_plot, res_amb["cum_msgs"], color="#C44E52", lw=1.2, label="PULSE (idle)")
     ax1c_in.plot(t_idle_plot, np.maximum(0.0, (res_amb["t_s"] - 0.1) * 10.0), color="#4C72B0", lw=1.0, ls="--", label="Periodic")
-    ax1c_in.set_title("Idle drift (zero msgs)", fontsize=5.5, pad=1)
-    ax1c_in.tick_params(labelsize=5.0)
+    ax1c_in.set_title("Idle drift (zero msgs)", fontsize=5.2, pad=1)
+    ax1c_in.set_xticks([0, 2, 4])
+    ax1c_in.set_yticks([0, 5, 10])
+    ax1c_in.tick_params(labelsize=4.8, pad=1)
     ax1c_in.set_xlim(-1.0, 4.0)
     ax1c_in.set_ylim(-0.5, 11.0)
 
@@ -1028,10 +1078,12 @@ if __name__ == "__main__":
     ax2a.set_xlabel("Msgs / agent (10 s)")
     ax2a.set_ylabel("Frequency nadir (Hz)")
     ax2a.set_title("(a) Pareto frontier", fontsize=8.5)
+    ax2a.ticklabel_format(useOffset=False, style="plain")
+    ax2a.yaxis.set_major_formatter(ticker.FormatStrFormatter("%.3f"))
     ax2a.legend(fontsize=5.8, frameon=False, loc="lower right")
 
     ax2b = fig2.add_subplot(gs2[1])
-    cats = ["No Support", "PULSE (Kd=4)", "Local Droop"]
+    cats = ["No Supp.", "PULSE", "Droop"]
     rocof_100_vals = [abs(rocof_100_base), abs(rocof_100_pulse), abs(res_droop["peak_rocof_100ms"])]
     rocof_500_vals = [abs(rocof_500_base), abs(rocof_500_pulse), abs(res_droop["peak_rocof_500ms"])]
     w_bar = 0.35
@@ -1039,7 +1091,7 @@ if __name__ == "__main__":
     ax2b.bar(x_idx - w_bar/2, rocof_100_vals, width=w_bar, color="#4C72B0", label="100 ms RoCoF")
     ax2b.bar(x_idx + w_bar/2, rocof_500_vals, width=w_bar, color="#C44E52", label="500 ms RoCoF")
     ax2b.set_xticks(x_idx)
-    ax2b.set_xticklabels(["No Supp.", "PULSE", "Droop"], fontsize=6.8)
+    ax2b.set_xticklabels(cats, fontsize=6.8)
     ax2b.set_ylabel("Peak |RoCoF| (Hz/s)")
     ax2b.set_title("(b) RoCoF window evaluation", fontsize=8.5)
     ax2b.legend(fontsize=5.4, frameon=False, loc="upper right")
@@ -1048,17 +1100,14 @@ if __name__ == "__main__":
     t_mc = np.arange(len(mc_mean)) * (dt * downsample_factor) - t_fault
     mask_mc = (t_mc >= -0.5) & (t_mc <= 14.5)
     t_mc_plot = t_mc[mask_mc]
-    ax2c.plot(t_mc_plot, mc_mean[mask_mc], color="#C44E52", lw=1.3, label="PULSE Mean (N=50)")
-    ax2c.fill_between(t_mc_plot, mc_mean[mask_mc] - 2*mc_std[mask_mc],
-                      mc_mean[mask_mc] + 2*mc_std[mask_mc],
-                      color="#C44E52", alpha=0.25, label=r"$\pm 2\sigma$ confidence")
-    ax2c.axhline(59.724, color="0.4", ls=":", lw=0.6)
+    ax2c.plot(t_mc_plot, mc_mean[mask_mc], color="#C44E52", lw=1.2, label=r"MC mean ($N=50$)")
+    ax2c.fill_between(t_mc_plot, (mc_mean - 2.0 * mc_std)[mask_mc], (mc_mean + 2.0 * mc_std)[mask_mc],
+                     color="#C44E52", alpha=0.25, label=r"$\pm 2\sigma$ envelope")
     ax2c.set_xlabel("Time since contingency (s)")
     ax2c.set_ylabel("Frequency (Hz)")
-    ax2c.set_xlim(-0.5, 14.5)
-    ax2c.set_ylim(59.55, 60.02)
-    ax2c.set_title("(c) Monte Carlo (50 seeds)", fontsize=8.5)
-    ax2c.legend(fontsize=5.6, frameon=False, loc="lower right")
+    ax2c.set_ylim(59.50, 60.05)
+    ax2c.set_title(r"(c) 50-seed Monte Carlo ($\pm 2\sigma$)", fontsize=8.5)
+    ax2c.legend(fontsize=5.5, frameon=False, loc="lower right")
 
     for ax_ in (ax2a, ax2b, ax2c):
         ax_.tick_params(labelsize=7)
@@ -1072,33 +1121,41 @@ if __name__ == "__main__":
     # Figure 3: Communication Network Imperfections
     print("Plotting Figure 3 (figs/fig3_comm_robustness.pdf/.png)...")
     fig3 = plt.figure(figsize=(7.2, 2.75))
-    gs3 = fig3.add_gridspec(1, 2, width_ratios=[1.05, 1.0], wspace=0.45)
+    gs3 = fig3.add_gridspec(1, 2, width_ratios=[1.1, 1.0], wspace=0.45)
 
     ax3a = fig3.add_subplot(gs3[0])
-    t_loss = np.arange(len(f_loss_dict[0.0])) * (dt * downsample_factor) - t_fault
-    mask_comm_zoom = (t_loss >= -0.1) & (t_loss <= 5.0)
-    ax3a.plot(t_loss[mask_comm_zoom], f_loss_dict[0.0][mask_comm_zoom], color="#C44E52", lw=1.3, label="0% Packet loss")
+    t_loss = t_loss_arr - t_fault
+    mask_comm_zoom = (t_loss >= -0.2) & (t_loss <= 6.0)
+    ax3a.plot(t_loss[mask_comm_zoom], f_loss_dict[0.0][mask_comm_zoom], color="#C44E52", lw=1.3, label="Ideal channel (0% drop)")
     ax3a.plot(t_loss[mask_comm_zoom], f_loss_dict[0.20][mask_comm_zoom], color="#4C72B0", lw=1.1, ls="--", label="20% Loss + 50 ms jitter")
-    ax3a.axvline(0, color="k", lw=0.6, ls=":")
     ax3a.set_xlabel("Time since contingency (s)")
     ax3a.set_ylabel("Frequency (Hz)")
-    ax3a.set_title("(a) Dynamic response under network loss", fontsize=8.5)
+    ax3a.set_ylim(59.50, 60.05)
+    ax3a.set_title("(a) Trajectory under packet loss & jitter", fontsize=8.5)
     ax3a.legend(fontsize=6.0, frameon=False, loc="lower right")
 
     ax3b = fig3.add_subplot(gs3[1])
     ax3b_twin = ax3b.twinx()
-    loss_pcts = [p * 100 for p in packet_loss_grid]
-    l1, = ax3b.plot(loss_pcts, loss_nadirs, "-o", color="#C44E52", ms=3.5, lw=1.2, label="Nadir (Hz)")
-    l2, = ax3b_twin.plot(loss_pcts, loss_rocofs, "-s", color="#4C72B0", ms=3.5, lw=1.2, label="Peak RoCoF (Hz/s)")
-    ax3b.set_ylim(59.735, 59.775)
-    ax3b_twin.set_ylim(0.200, 0.470)
+    p_loss_pct = [p * 100.0 for p in packet_loss_grid]
+    l3_1, = ax3b.plot(p_loss_pct, loss_nadirs, "-o", color="#C44E52", ms=4.0, lw=1.2, label="Nadir (Hz)")
+    l3_2, = ax3b_twin.plot(p_loss_pct, loss_rocofs, "-s", color="#4C72B0", ms=4.0, lw=1.2, label="500 ms RoCoF (Hz/s)")
+    
+    nadir_pad = max(0.020, (max(loss_nadirs) - min(loss_nadirs)) * 0.5)
+    ax3b.set_ylim(min(loss_nadirs) - nadir_pad, max(loss_nadirs) + nadir_pad)
+    ax3b.ticklabel_format(useOffset=False, style="plain")
+    ax3b.yaxis.set_major_formatter(ticker.FormatStrFormatter("%.3f"))
+    
+    rocof_max = max(loss_rocofs)
+    ax3b_twin.set_ylim(0.0, max(0.45, rocof_max * 1.3))
+    ax3b_twin.yaxis.set_major_formatter(ticker.FormatStrFormatter("%.3f"))
+    
     ax3b.set_xlabel("Packet drop probability (%)")
-    ax3b.set_ylabel("Nadir (Hz)", color="#C44E52")
-    ax3b_twin.set_ylabel("500 ms RoCoF (Hz/s)", color="#4C72B0")
+    ax3b.set_ylabel("Frequency nadir (Hz)", color="#C44E52")
+    ax3b_twin.set_ylabel("Peak |RoCoF| (Hz/s)", color="#4C72B0")
     ax3b.tick_params(axis="y", labelcolor="#C44E52")
     ax3b_twin.tick_params(axis="y", labelcolor="#4C72B0")
-    ax3b.set_title("(b) Nadir / RoCoF vs packet loss", fontsize=8.5)
-    ax3b.legend(handles=[l1, l2], fontsize=5.8, frameon=False, loc="upper right")
+    ax3b.set_title("(b) Resilience across drop rates", fontsize=8.5)
+    ax3b.legend(handles=[l3_1, l3_2], fontsize=5.8, frameon=True, facecolor='white', framealpha=0.9, edgecolor='none', loc="center right")
 
     for ax_ in (ax3a, ax3b):
         ax_.tick_params(labelsize=7)
@@ -1110,40 +1167,38 @@ if __name__ == "__main__":
     fig3.savefig("figs/fig3_comm_robustness.pdf", bbox_inches="tight")
     fig3.savefig("figs/fig3_comm_robustness.png", dpi=400, bbox_inches="tight")
 
-    # Figure 4: SoC Reserve & Battery Runtime Model (NO NEGATIVE POWER DIPPING)
+    # Figure 4: State-of-Charge & Backup Runtime Preservation
     print("Plotting Figure 4 (figs/fig4_soc_reserve.pdf/.png)...")
     fig4 = plt.figure(figsize=(7.2, 2.75))
-    gs4 = fig4.add_gridspec(1, 2, width_ratios=[1.05, 1.0], wspace=0.45)
+    gs4 = fig4.add_gridspec(1, 2, width_ratios=[1.1, 1.0], wspace=0.45)
 
     ax4a = fig4.add_subplot(gs4[0])
     ax4a.plot(t_plot_30[mask_30], res_base["f_hz"][mask_30], color="0.55", lw=1.1, label="No support")
-    ax4a.plot(t_plot_30[mask_30], res_pulse["f_hz"][mask_30], color="#C44E52", lw=1.3, label="Full fleet (100%)")
+    ax4a.plot(t_plot_30[mask_30], res_pulse["f_hz"][mask_30], color="#C44E52", lw=1.3, label="Unconstrained (100% fleet)")
     ax4a.plot(t_plot_30[mask_30], res_soc["f_hz"][mask_30], color="#55A868", lw=1.2, ls="--", label="SoC-gated (80% floor)")
-    ax4a.axhline(59.70, color="0.4", lw=0.5, ls=":")
+    ax4a.axhline(59.70, color="k", lw=0.5, ls=":", label="59.70 Hz ref")
     ax4a.set_xlabel("Time since contingency (s)")
     ax4a.set_ylabel("Frequency (Hz)")
-    ax4a.set_title("(a) Nadir with backup reserve protected", fontsize=8.5)
-    ax4a.legend(fontsize=6.0, frameon=False, loc="lower right")
+    ax4a.set_xlim(-0.5, 29.0)
+    ax4a.set_ylim(59.35, 60.12)
+    ax4a.set_title("(a) SoC reserve-gated recovery", fontsize=8.5)
+    ax4a.legend(fontsize=5.5, frameon=False, loc="lower right")
 
     ax4b = fig4.add_subplot(gs4[1])
-    # Battery runtime discharge timeline under P_IT = 30 kW
-    p_cum_kWh = np.cumsum(np.maximum(res_soc["p_mw"], 0.0)) * (dt * downsample_factor) / 3600.0 * 1000.0 / n_agents
-    mean_runtime_min = res_soc["runtime_min"].mean(axis=1)
-
     ax4b_twin = ax4b.twinx()
-    l4_1, = ax4b.plot(t_plot_30[mask_30], p_cum_kWh[mask_30], color="#8172B2", lw=1.3, label="Energy drawn / rack (kWh)")
-    l4_2, = ax4b_twin.plot(t_plot_30[mask_30], mean_runtime_min[mask_30], color="#4C72B0", lw=1.2, ls="--", label="Backup runtime (min)")
-    ax4b_twin.axhline(t_tier4_min, color="k", ls=":", lw=0.7, label="Tier IV floor (15 min)")
-    ax4b_twin.axhline(t_tier3_min, color="0.4", ls="-.", lw=0.6, label="Tier III floor (10 min)")
+    energy_trace_kwh = np.maximum(0.0, np.cumsum(res_soc["p_mw"] * 1000.0 * (dt * downsample_factor / 3600.0)) / n_agents)
+    l4_1, = ax4b.plot(t_plot_30[mask_30], energy_trace_kwh[mask_30], color="#C44E52", lw=1.2, label="Energy drawn / rack (kWh)")
+    l4_2, = ax4b_twin.plot(t_plot_30[mask_30], res_soc["runtime_min"][mask_30, :].mean(axis=1), color="#4C72B0", lw=1.2, ls="--", label="IT backup runtime (min)")
+    l4_tier4 = ax4b_twin.axhline(t_tier4_min, color="0.4", lw=0.7, ls=":", label="Tier IV floor (15 min)")
+    l4_tier3 = ax4b_twin.axhline(t_tier3_min, color="0.6", lw=0.7, ls="--", label="Tier III floor (10 min)")
     ax4b.set_xlabel("Time since contingency (s)")
-    ax4b.set_ylabel("Energy drawn (kWh / rack)", color="#8172B2")
-    ax4b_twin.set_ylabel("Backup runtime (min)", color="#4C72B0")
-    ax4b.tick_params(axis="y", labelcolor="#8172B2")
+    ax4b.set_ylabel("Energy drawn (kWh / rack)", color="#C44E52")
+    ax4b_twin.set_ylabel("IT Backup runtime (min)", color="#4C72B0")
+    ax4b.tick_params(axis="y", labelcolor="#C44E52")
     ax4b_twin.tick_params(axis="y", labelcolor="#4C72B0")
-    ax4b.set_ylim(-0.01, 0.25)
-    ax4b_twin.set_ylim(0, 60.0)
-    ax4b.set_title("(b) Backup runtime preservation", fontsize=8.5)
-    ax4b.legend(handles=[l4_1, l4_2], fontsize=5.6, frameon=False, loc="center right")
+    ax4b.set_xlim(-0.5, 29.0)
+    ax4b.set_title("(b) Energy throughput & backup autonomy", fontsize=8.5)
+    ax4b.legend(handles=[l4_1, l4_2, l4_tier4, l4_tier3], fontsize=5.2, frameon=True, facecolor='white', framealpha=0.9, edgecolor='none', loc="center right")
 
     for ax_ in (ax4a, ax4b):
         ax_.tick_params(labelsize=7)
@@ -1166,9 +1221,9 @@ if __name__ == "__main__":
     ax5a.plot(t_plot_30[mask_30], res_pmu["f_hz"][mask_30], color="#4C72B0", lw=1.1, ls="-.", label=r"2-cyc PMU ($K_d=4$)")
     ax5a.set_xlabel("Time since contingency (s)")
     ax5a.set_ylabel("Frequency (Hz)")
-    ax5a.set_ylim(59.72, 60.01)
+    ax5a.set_ylim(59.50, 60.05)
     ax5a.set_title("(a) PMU/PLL filtering & chattering elimination", fontsize=8.5)
-    ax5a.legend(fontsize=5.6, frameon=False, loc="upper right")
+    ax5a.legend(fontsize=5.6, frameon=False, loc="lower right")
 
     ax5b = fig5.add_subplot(gs5[1])
     ax5b_twin = ax5b.twinx()
@@ -1212,23 +1267,40 @@ if __name__ == "__main__":
         for kv, kn, kp in zip(kd_grid, kd_nadirs, kd_peaks_pct):
             fh.write(f"kd_sweep,{kv:.1f},{kn:.4f},{kp:.2f}\n")
         fh.write(f"nadir_adaptive={nadir_pulse:.4f}\n")
-        fh.write(f"msgs_fixed_evt_per_agent_6s={res_fetc['msg_count_per_agent']:.2f}\n")
-        fh.write(f"msgs_adaptive_per_agent_6s={res_pulse['msg_count_per_agent']:.2f}\n")
-        
-        # Contingency sweeps (3%, 5%, 8%)
+        # Contingency sweeps (3%, 5%, 8%) over authentic 6.0 s horizon
+        sweep_rows = []
+        nom_6s_fetc_msgs = None
+        nom_6s_pulse_msgs = None
+
         for frac, loss_mw in [(0.03, 9.0), (0.05, 15.0), (0.08, 24.0)]:
-            r_sw = run_sfr_simulation(horizon=6.0, contingency_frac=frac, controller_mode="pulse_adaptive", seed=42)
-            r_sw_base = run_sfr_simulation(horizon=6.0, contingency_frac=frac, controller_mode="none")
-            r_sw_poll = run_sfr_simulation(horizon=6.0, contingency_frac=frac, controller_mode="periodic_poll", poll_period=0.100)
-            fh.write(f"sweep,{frac:.2f},{r_sw['nadir_hz']:.4f},{r_sw_base['nadir_hz']:.4f},{r_sw_poll['nadir_hz']:.4f},{res_fetc['msg_count_per_agent']:.2f},60.00,{r_sw['msg_count_per_agent']:.2f}\n")
+            r_sw = run_sfr_simulation(horizon=6.0, contingency_frac=frac, controller_mode="pulse_adaptive", filter_mode="pll_1cycle", kd=Kd_nom, seed=42)
+            r_sw_base = run_sfr_simulation(horizon=6.0, contingency_frac=frac, controller_mode="none", seed=42)
+            r_sw_poll = run_sfr_simulation(horizon=6.0, contingency_frac=frac, controller_mode="periodic_poll", poll_period=0.100, filter_mode="pll_1cycle", kd=Kd_nom, seed=42)
+            r_sw_fetc = run_sfr_simulation(horizon=6.0, contingency_frac=frac, controller_mode="fetc_fixed", filter_mode="pll_1cycle", kd=Kd_nom, seed=42)
+            
+            sweep_rows.append(
+                f"sweep,{frac:.2f},{r_sw['nadir_hz']:.4f},{r_sw_base['nadir_hz']:.4f},{r_sw_poll['nadir_hz']:.4f},"
+                f"{r_sw_fetc['msg_count_per_agent']:.2f},{r_sw_poll['msg_count_per_agent']:.2f},{r_sw['msg_count_per_agent']:.2f}\n"
+            )
+            if abs(frac - 0.05) < 1e-4:
+                nom_6s_fetc_msgs = r_sw_fetc["msg_count_per_agent"]
+                nom_6s_pulse_msgs = r_sw["msg_count_per_agent"]
+
+        # Write authentic 6s message summary metrics
+        fh.write(f"msgs_fixed_evt_per_agent_6s={nom_6s_fetc_msgs:.2f}\n")
+        fh.write(f"msgs_adaptive_per_agent_6s={nom_6s_pulse_msgs:.2f}\n")
+        
+        # Write sweep comparison rows
+        for row_str in sweep_rows:
+            fh.write(row_str)
             
         for ev, fn, fm, pn, pm in zip(eta_sweep_vals, pareto_fetc_nadir, pareto_fetc_msgs, pareto_pulse_nadir, pareto_pulse_msgs):
             fh.write(f"eta_sweep,{ev:.3f},{fn:.4f},{fm:.2f}\n")
         for pd_, nd_, rc_ in zip(packet_loss_grid, loss_nadirs, loss_rocofs):
             fh.write(f"packet_loss_sweep,{pd_:.2f},{nd_:.4f},{rc_:.4f}\n")
             
-        fh.write(f"soc_mean_avail_pct=39.39\n")
-        fh.write(f"soc_frac_fully_reserved_pct=39.50\n")
+        fh.write(f"soc_mean_avail_pct={res_soc['soc_mean_avail_pct']:.2f}\n")
+        fh.write(f"soc_frac_fully_reserved_pct={res_soc['soc_frac_fully_reserved_pct']:.2f}\n")
         fh.write(f"nadir_soc_constrained={nadir_soc:.4f}\n")
         
         # Comprehensive Modernized Keys
@@ -1251,7 +1323,9 @@ if __name__ == "__main__":
         fh.write(f"theoretical_rocof_reduction_pct={theoretical_rocof_reduction_pct:.2f}\n")
         fh.write(f"nadir_droop={nadir_droop:.4f}\n")
         fh.write(f"nadir_poll100={nadir_poll100:.4f}\n")
+        fh.write(f"nadir_poll50={nadir_poll50:.4f}\n")
         fh.write(f"nadir_poll20={nadir_poll20:.4f}\n")
+        fh.write(f"nadir_poll10={nadir_poll10:.4f}\n")
         fh.write(f"nadir_fetc={nadir_fetc:.4f}\n")
         fh.write(f"nadir_pulse={nadir_pulse:.4f}\n")
         fh.write(f"rocof_100ms_base={rocof_100_base:.4f}\n")
@@ -1274,8 +1348,8 @@ if __name__ == "__main__":
         fh.write(f"soc_capacity_fade_10yr_pct={deg_soc['fade_10yr_pct_mean']:.6f}\n")
         fh.write(f"runtime_min_final_mean={res_soc['runtime_min'][-1, :].mean():.2f}\n")
         fh.write(f"runtime_min_final_min={res_soc['runtime_min'][-1, :].min():.2f}\n")
-        fh.write(f"tier3_compliance_pct=100.00\n")
-        fh.write(f"tier4_compliance_pct=100.00\n")
+        fh.write(f"tier3_compliance_pct={res_soc['tier3_compliance_pct']:.2f}\n")
+        fh.write(f"tier4_compliance_pct={res_soc['tier4_compliance_pct']:.2f}\n")
         fh.write(f"mc_nadir_mean={mc_nadirs.mean():.4f}\n")
         fh.write(f"mc_nadir_std={mc_nadirs.std():.4f}\n")
         for ev, fn, fm, pn, pm in zip(eta_sweep_vals, pareto_fetc_nadir, pareto_fetc_msgs, pareto_pulse_nadir, pareto_pulse_msgs):
