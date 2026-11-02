@@ -79,21 +79,58 @@ flowchart LR
     D --> E["Bode/Nyquist Heatmap<br>(Verified margins + delay checks)"]
 ```
 
-| Visual Asset | Description & Content | Strategic Purpose |
+| Figure | Reviewer Issue It Addresses & Content | Strategic Purpose |
 |---|---|---|
-| **New Graphical Abstract** | Three concise panels: (1) Problem (frequency nadir and RoCoF excursion), (2) Method (adaptive time-relaxing event threshold), (3) Result (verified nadir, zero idle traffic, preserved backup). | Replaces duplicate Fig. 1 with an outcome-driven summary. |
-| **Time-Scale Map** | Horizontal log-time axis ($1\,\text{ms} \to 30\,\text{s}$): sensor filter window, PULSE actuation, inertial window, reheat governor, and SoC reserve depletion. | Situates PULSE physically across power grid dynamical regimes. |
-| **Event Raster** | 2D scatter plot ($200\,\text{agents} \times \text{time}$) displaying transmission impulses for Periodic, FETC, and PULSE. | Visually illustrates communication traffic pruning. |
-| **Single-Agent Trace** | Synchronized time traces of $\eta_i(t)$, candidate power $p_i^\ast(t)$, ZOH output $p_i(t)$, and trigger impulses. | Explains the adaptive threshold relaxation mechanism. |
-| **Bode / Nyquist with Margin Checks** | Verified Nyquist/Bode plots with annotated gain/phase margins, delay margin heatmap vs. $(K_d, \tau_f)$, and time-domain injected delay traces ($0.5\times, 1.0\times, 1.5\times$). | Provides irrefutable, verifiable proof of closed-loop stability. |
-| **Comprehensive Pareto Frontier** | Nadir vs. message volume across all baselines (Send-on-Delta, Periodic, FETC, PULSE) with confidence intervals. | Replaces the 2-curve comparison with a complete benchmark. |
-| **Stability Region in $(p_{\mathrm{loss}}, \tau)$ Plane** | Shaded stable/unstable operational regions with theoretical stability bounds overlaid. | Replaces uninformative overlapping loss traces. |
-| **Fleet State Distribution** | Pre- and post-event SoC histograms, availability factor $a_i$, and runtime CDF curves annotated with Tier III/IV standards. | Proves reserve preservation across heterogeneous fleets. |
-| **Physical Deployment Architecture** | Physical communication layout: Rack UPS $\to$ Smart PDU $\to$ Local Microgrid Controller $\to$ Substation Gateway with a stacked latency budget. | Grounds the communication network and payload in realistic facilities. |
+| `fig1_margins` | **Is the frequency-domain analysis right?** Bode plot with every crossover and delay-margin map over $K_d$ and $\tau_f$. | Replaces questionable numeric derivation with verified margins. |
+| `fig2_delay_validation` | **Does the delay margin hold in time domain?** Injects $0.5\times$, $0.9\times$, $1.1\times$, and $1.5\times$ predicted margin to show decaying vs. growing oscillations. | Provides empirical proof of closed-loop stability limits. |
+| `fig3_schemes` | **Canonical configuration comparison:** 6 schemes evaluated on the same heterogeneous, SoC-gated fleet with single defined message metrics. | Solves the dual-nadir and disparate fleet configuration issue. |
+| `fig4_raster` | **Event raster:** $200\,\text{agents} \times \text{time}$ scatter of message events for periodic, FETC, and PULSE. | Visually demonstrates where communication savings come from. |
+| `fig5_agent_trace` | **Single-agent trace:** Synchronized $\eta_i(t)$, candidate $p^\ast$, ZOH command $p_i$, and actual power. | Explains the adaptive threshold relaxation mechanism. |
+| `fig6_pareto` | **Pareto frontier:** Nadir vs. messages across all baselines (droop, periodic, periodic+threshold, FETC, PULSE). | Demonstrates PULSE strictly dominates the trade-off front. |
+| `fig7_fleet` | **Fleet state & reserve preservation:** SoC histogram, availability $a_i$, post-event runtime CDF, and SoC floor sweep ($60\%\text{--}90\%$). | Demonstrates runtime compliance across heterogeneous racks. |
+| `fig8_robustness` | **Stress test heatmap:** Delay $\times$ packet loss grid up to and beyond the delay margin ($0\text{--}1.2\,\text{s}$ delay, $0\text{--}90\%$ loss). | Replaces uninformative overlapping loss traces. |
+| `fig9_contingency` | **Contingency heatmaps:** Absolute nadir lift (mHz), relative lift (%), and message count across $(H, \Delta P_L)$ regimes. | Converts Table 3 into clean visual heatmaps. |
+| `fig10_montecarlo` | **Honest Monte Carlo:** 20+ runs randomizing both channel (loss, latency, jitter) AND fleet initial states (SoC, capacity). | Shows true statistical spread across the fleet. |
+| **New Graphical Abstract** | Three panels: problem (nadir/RoCoF excursion), idea (relaxing threshold), outcome (2–3 key numbers). | Replaces duplicate Fig. 1 with an outcome-driven summary. |
+| **Time-Scale Map** | Log-time axis ($1\,\text{ms} \to 30\,\text{s}$): filter window, PULSE actuation, inertial window, reheat governor, and energy depletion. | Situates PULSE physically across power grid dynamical regimes. |
+| **Physical Deployment Architecture** | Physical communication layout: Rack UPS $\to$ Smart PDU $\to$ Local Microgrid Controller $\to$ Substation Gateway. | Grounds the communication network and payload in realistic facilities. |
 
 ---
 
-## 6. Literature Overhaul & Verified Reference Roadmap
+## 6. Implementation Toolkit (`pulse_review_toolkit.py`)
+
+An independent simulation and verification toolkit has been created at [`pulse_review_toolkit.py`](file:///c:/Users/17756/OneDrive%20-%20University%20of%20Nevada,%20Reno/Projects/Fast%20papers/Sustainability/Review/07_PULSE/01_Sustainable_Energy/pulse_review_toolkit.py).
+
+### Capabilities
+- **Independent Analytical Re-Check:** Recomputes $H_v$, $D_v$, initial RoCoF, quasi-steady-state frequency, crossover frequencies, phase margins, and delay margin, printing them alongside the paper's original numbers.
+- **Canonical Simulation Engine:** Evaluates all 6 schemes on a single, reproducible, heterogeneous, SoC-gated fleet.
+- **Automated Figure Generation:** Generates `fig1_margins` through `fig10_montecarlo` in PNG and vector PDF format into `./figures/`.
+
+### Modeling Refinements in the Toolkit
+- Soft deadband: $\mathrm{sdb}(x, d) = \mathrm{sign}(x) \cdot \max(|x| - d, 0)$ to prevent step discontinuities in $p^\ast$.
+- Local contingency onset detection: Triggered when $|\widehat{\Delta f}| > 20\,\text{mHz}$ rather than assuming an oracle signal.
+- Inverter time constant: $5\,\text{ms}$ first-order lag on the ZOH setpoint.
+- Packet drop retry semantics: Dropped packets leave setpoints unchanged and retry after the dwell time.
+- Hard local clamp: Enforces $p_i \le a_i \cdot P_{\max}$ continuously between events to prevent SoC floor violations.
+
+### Execution Instructions
+```bash
+# Fast test run (takes ~1-2 minutes)
+python pulse_review_toolkit.py --fast
+
+# Full production run (all seeds, fine grids)
+python pulse_review_toolkit.py
+```
+
+### Key Diagnostic Checks to Validate
+1. **Console Check:** Compare the printed crossover frequencies, phase margin, and delay margin against the manuscript text. Align the paper with the script's exact analytical outputs.
+2. **Time-Domain Delay Margin Check (`fig2_delay_validation`):** Confirm that simulated trajectories flip from decaying oscillations to growing instability right at $1.0\times\text{--}1.1\times$ the calculated delay margin.
+3. **Local Droop Comparison:** Account for the fact that local droop achieves the same nadir with 0 messages by articulating the network reporting/telemetry constraints in data center microgrids.
+4. **Unified Gated Reporting:** Report the SoC-gated numbers as the primary headline metrics across all sections.
+
+---
+
+## 7. Literature Overhaul & Verified Reference Roadmap
 
 Organize the literature review into five distinct thematic gaps rather than an author-by-author list:
 1. **Low-Inertia Frequency Containment from BESS**: Sizing, RoCoF impacts, and subsecond speed constraints.
@@ -122,7 +159,7 @@ Organize the literature review into five distinct thematic gaps rather than an a
 
 ---
 
-## 7. Submission Package & SEGAN Workflow
+## 8. Submission Package & SEGAN Workflow
 
 - **Cover Letter Strategy**:
   - Keep to 1 single-spaced, high-impact page.
